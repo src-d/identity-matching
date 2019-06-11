@@ -13,7 +13,7 @@ type GitLabMatcher struct {
 }
 
 // NewGitLabMatcher creates a new matcher given a GitLab OAuth token.
-func NewGitLabMatcher(apiURL, token string) (GitLabMatcher, error) {
+func NewGitLabMatcher(apiURL, token string) (Matcher, error) {
 	if apiURL == "" {
 		apiURL = "https://gitlab.com/api/v4"
 	}

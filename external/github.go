@@ -17,7 +17,7 @@ type GitHubMatcher struct {
 }
 
 // NewGitHubMatcher creates a new matcher given a GitHub token.
-func NewGitHubMatcher(apiURL, token string) (GitHubMatcher, error) {
+func NewGitHubMatcher(apiURL, token string) (Matcher, error) {
 	if apiURL == "" {
 		apiURL = "https://api.github.com/"
 	}
