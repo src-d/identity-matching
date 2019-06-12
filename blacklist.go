@@ -5,28 +5,30 @@ import (
 	"strings"
 )
 
-func isIgnored(s string) bool {
-	s = strings.TrimSpace(s)
-	return !strings.Contains(s, "@") ||
-		isIgnoredEmail(s) ||
-		isIgnoredDomain(s) ||
-		isIgnoredTLD(s) ||
-		isSingleLabelDomain(s) ||
-		isIPEmail(s) ||
-		isMultipleEmail(s)
+func isIgnoredEmail(s string) bool {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if !strings.Contains(s, "@") || isBlacklistedEmail(s) || isMultipleEmail(s) {
+		return true
+	}
+	parts := strings.Split(s, "@")
+	domain := parts[1]
+	return isIgnoredDomain(domain) ||
+		   isSingleLabelDomain(s) ||
+		   isIPEmail(domain)
+
 }
 
 func isMultipleEmail(s string) bool {
 	return strings.Index(s, "@") != strings.LastIndex(s, "@")
 }
 
-var ignoredEmails = map[string]struct{}{
+var blacklistedEmails = map[string]struct{}{
 	"nobody@android.com": {},
 	"badger@gitter.im":   {},
 }
 
-func isIgnoredEmail(s string) bool {
-	_, ok := ignoredEmails[s]
+func isBlacklistedEmail(s string) bool {
+	_, ok := blacklistedEmails[s]
 	return ok
 }
 
@@ -34,7 +36,7 @@ var ignoredDomains = map[string]struct{}{
 	"localhost.localdomain": {},
 	"example.com":           {},
 	"test.com":              {},
-	"DOMAIN.COM":            {},
+	"domain.com":            {},
 }
 
 func isIgnoredDomain(s string) bool {
@@ -43,37 +45,15 @@ func isIgnoredDomain(s string) bool {
 	return ok
 }
 
-var ignoredTLD = map[string]struct{}{
-	"localhost":   {},
-	"localdomain": {},
-	"local":       {},
-	"test":        {},
-	"internal":    {},
-	"private":     {},
-	"lan":         {},
-	"hq":          {},
-	"domain":      {},
-	"(none)":      {},
-	"home":        {},
-}
-
-var isIPEmailRegex = regexp.MustCompile(`@\d+\.\d+\.\d+\.\d+$`)
+var isIP4EmailRegex = regexp.MustCompile(`@\d+\.\d+\.\d+\.\d+$`)
+var isIP6EmailRegex = regexp.MustCompile(`(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))`)
 
 func isIPEmail(s string) bool {
-	return isIPEmailRegex.MatchString(s)
-}
-
-func isIgnoredTLD(s string) bool {
-	parts := strings.Split(s, ".")
-	_, ok := ignoredTLD[parts[len(parts)-1]]
-	return ok
+	return isIP4EmailRegex.MatchString(s) || isIP6EmailRegex.MatchString(s)
 }
 
 func isSingleLabelDomain(s string) bool {
-	parts := strings.Split(s, "@")
-	last := parts[len(parts)-1]
-	labels := strings.Split(last, ".")
-	return len(labels) == 1
+	return strings.Count(s, ".") == 0
 }
 
 var ignoredNames = map[string]struct{}{

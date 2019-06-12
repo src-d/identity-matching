@@ -28,6 +28,7 @@ type Args struct {
 	External string
 	ApiURL string
 	Token string
+	Cache string
 }
 
 func main() {
@@ -51,7 +52,7 @@ func main() {
 		logrus.Fatalf("failed to initialize %s: %v", args.External, err)
 	}
 
-	people, err := idmatch.FindPeople(ctx, connStr, path)
+	people, err := idmatch.FindPeople(ctx, connStr, args.Cache)
 	if err != nil {
 		logrus.Fatalf("unable to find people: %v", err)
 	}
@@ -61,16 +62,8 @@ func main() {
 		"people":  len(people),
 	}).Info("found people")
 
-	idmatch.MatchByEmail(people)
-	logrus.WithField("people", len(people)).Info("grouped people by email")
 
-	idmatch.MatchByGitHub(ctx, people, matcher)
-	logrus.WithField("people", len(people)).Info("grouped people by GitHub")
-
-	idmatch.MatchByNames(people)
-	logrus.WithField("people", len(people)).Info("grouped people by names")
-
-	if err := storeMatches(people, path); err != nil {
+	if err := storeMatches(people, args.Output); err != nil {
 		logrus.Fatalf("unable to store matches: %s", err)
 	}
 
@@ -95,6 +88,7 @@ func parseArgs() Args {
 	flag.StringVar(&args.ApiURL, "api-url", "",
 		"API URL of the external matching service, the blank value means the public website")
 	flag.StringVar(&args.Token, "token", "", "API token for the external matching service")
+	flag.StringVar(&args.Cache, "cache", "cache.csv", "Path to the cached raw signatures")
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
 
@@ -108,7 +102,7 @@ func parseArgs() Args {
 
 func storeMatches(people idmatch.People, path string) error {
 	var buf bytes.Buffer
-	people.Iter(func(_ uint64, p *idmatch.Person) bool {
+	people.ForEach(func(_ uint64, p *idmatch.Person) bool {
 		buf.WriteString(p.String())
 		buf.WriteRune('\n')
 		return false

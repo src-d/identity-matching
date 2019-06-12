@@ -3,12 +3,13 @@ package idmatch
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
-	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -16,23 +17,13 @@ import (
 
 // Person is a single individual that can have multiple names and emails.
 type Person struct {
-	id     uint64
+	id     string
 	names  []string
 	emails []string
 }
 
 func (p Person) String() string {
-	var parts = make([]string, 0, len(p.names)+len(p.emails))
-
-	for _, n := range p.names {
-		parts = append(parts, n)
-	}
-
-	for _, e := range p.emails {
-		parts = append(parts, e)
-	}
-
-	return strings.Join(parts, "|")
+	return strings.Join(p.names, "|") + "|" + strings.Join(p.emails, "|")
 }
 
 // People is a map of persons indexed by their ID.
@@ -43,13 +34,13 @@ func newPeople(persons []rawPerson) People {
 	var id uint64
 
 	for _, p := range persons {
-		if isIgnoredName(p.name) || isIgnored(p.email) {
+		if isIgnoredName(p.name) || isIgnoredEmail(p.email) {
 			continue
 		}
 
 		id++
 		result[id] = &Person{
-			id:     id,
+			id:     "_" + strconv.FormatUint(id, 10),
 			names:  []string{cleanName(p.name)},
 			emails: []string{p.email},
 		}
@@ -59,50 +50,36 @@ func newPeople(persons []rawPerson) People {
 }
 
 // Merge two persons with the given ids.
-func (p People) Merge(id1, id2 uint64) {
-	p1 := p[id1]
-	p2 := p[id2]
-	p1.emails = unique(merge(p1.emails, p2.emails))
-	p1.names = unique(merge(p1.names, p2.names))
-	delete(p, id2)
+func (p People) Merge(ids... uint64) uint64 {
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	p0 := p[ids[0]]
+	for _, id := range ids[1:] {
+		p0.emails = append(p0.emails, p[id].emails...)
+		p0.names = append(p0.names, p[id].names...)
+		delete(p, id)
+	}
+	p0.emails = unique(p0.emails)
+	p0.names = unique(p0.names)
+	return ids[0]
 }
 
-func (p People) Iter(f func(uint64, *Person) bool) {
-	var keys = make([]int, len(p))
+func (p People) ForEach(f func(uint64, *Person) bool) {
+	var keys = make([]uint64, len(p))
 	for k := range p {
-		keys = append(keys, int(k))
+		keys = append(keys, k)
 	}
-	sort.Ints(keys)
-
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	for _, k := range keys {
-		k := uint64(k)
-		if _, ok := p[k]; ok {
-			if stop := f(k, p[k]); stop {
-				return
-			}
+		if stop := f(k, p[k]); stop {
+			return
 		}
 	}
 }
 
-func merge(a, b []string) []string {
-	var result = make([]string, 0, len(a)+len(b))
-	for _, aa := range a {
-		result = append(result, aa)
-	}
-	for _, bb := range b {
-		result = append(result, bb)
-	}
-	return result
-}
-
 // FindPeople returns all the people in the database or the disk, if it was
 // already cached.
-func FindPeople(
-	ctx context.Context,
-	connString string,
-	dataPath string,
-) (People, error) {
-	persons, err := findRawPersons(ctx, connString, dataPath)
+func FindPeople(ctx context.Context, connString string, cachePath string) (People, error) {
+	persons, err := findRawPersons(ctx, connString, cachePath)
 	if err != nil {
 		return nil, err
 	}
@@ -111,47 +88,42 @@ func FindPeople(
 }
 
 const findPeopleSQL = `
-SELECT DISTINCT commit_author_name, commit_author_email
-FROM commits
-INNER JOIN (
-	SELECT commit_author_email as email, COUNT(*) as num
-	FROM commits
-	GROUP BY email
-) t
-ON commit_author_email = email AND num > 1
+SELECT DISTINCT repository_id, commit_author_name, commit_author_email
+FROM commits;
 `
 
-type matches map[string][]string
-
 type rawPerson struct {
+	repo  string
 	name  string
 	email string
 }
 
-func (p rawPerson) String() string {
-	return fmt.Sprintf("%s|%s", p.name, p.email)
-}
-
-func readPeopleFromDisk(filePath string) ([]rawPerson, error) {
-	bytes, err := ioutil.ReadFile(filePath)
+func readPeopleFromDisk(filePath string) (persons []rawPerson, err error) {
+	var file *os.File
+	file, err = os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
-
-	var result []rawPerson
-	for _, line := range strings.Split(string(bytes), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
+	defer func() {
+		errClose := file.Close()
+		if err == nil {
+			err = errClose
 		}
+	}()
 
-		parts := strings.Split(line, "|")
-		if strings.Contains(parts[1], ",") {
-			continue
+	reader := csv.NewReader(file)
+	for err == nil {
+		var r []string
+		r, err = reader.Read()
+		if len(r) != 3 {
+			err = fmt.Errorf("invalid CSV record: %s", strings.Join(r, ","))
 		}
-		result = append(result, rawPerson{parts[0], parts[1]})
+		persons = append(persons, rawPerson{r[0], r[1], r[2]})
 	}
-
-	return result, nil
+	if err == io.EOF {
+		err = nil
+	}
+	return
 }
 
 func readPeopleFromDatabase(ctx context.Context, conn string) ([]rawPerson, error) {
@@ -167,83 +139,59 @@ func readPeopleFromDatabase(ctx context.Context, conn string) ([]rawPerson, erro
 
 	var result []rawPerson
 	for rows.Next() {
-		var name, email string
-		if err := rows.Scan(&name, &email); err != nil {
+		var repo, name, email string
+		if err := rows.Scan(&repo, &name, &email); err != nil {
 			return nil, err
 		}
-
-		if strings.Contains(email, ",") {
-			emails := strings.Split(email, ",")
-			names := strings.Split(name, " and ")
-
-			for i := 0; i < len(emails); i++ {
-				emails[i] = strings.TrimSpace(emails[i])
-			}
-
-			for i := 0; i < len(names); i++ {
-				names[i] = strings.TrimSpace(names[i])
-			}
-
-			if len(names) == len(emails) {
-				for i, n := range names {
-					if isIgnored(emails[i]) {
-						logrus.Warnf("ignored email: %s", emails[i])
-						continue
-					}
-
-					result = append(result, rawPerson{n, emails[i]})
-				}
-
-				continue
-			}
-		}
-
-		if isIgnored(email) {
-			logrus.Warnf("ignored email: %s", email)
-			continue
-		}
-
-		result = append(result, rawPerson{name, email})
+		result = append(result, rawPerson{repo, name, email})
 	}
 
 	return result, rows.Err()
 }
 
-func storePeopleInDisk(filePath string, result []rawPerson) error {
-	f, err := os.Create(filePath)
+func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
+	var file *os.File
+	file, err = os.Create(filePath)
 	if err != nil {
-		return err
+		return
 	}
+	defer func() {
+		errClose := file.Close()
+		if err == nil {
+			err = errClose
+		}
+	}()
 
-	defer f.Close()
-
-	var lines = make([]string, len(result))
-	for i, p := range result {
-		lines[i] = p.String()
+	writer := csv.NewWriter(file)
+	defer func() {
+		writer.Flush()
+		if err == nil {
+			err = writer.Error()
+		}
+	}()
+	for _, p := range result {
+		err = writer.Write([]string{p.repo, p.name, p.email})
+		if err != nil {
+			return
+		}
 	}
-
-	_, err = f.Write([]byte(strings.Join(lines, "\n")))
-	return err
+	return
 }
 
-func findRawPersons(
-	ctx context.Context,
-	connStr string,
-	path string,
-) ([]rawPerson, error) {
-	filePath := filepath.Join(path, "people.txt")
-	if _, err := os.Stat(filePath); err == nil {
-		return readPeopleFromDisk(filePath)
+func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPerson, error) {
+	if _, err := os.Stat(path); err == nil {
+		return readPeopleFromDisk(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
+	logrus.Printf("not cached in %s, loading from the database", path)
 	result, err := readPeopleFromDatabase(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := storePeopleInDisk(filePath, result); err != nil {
+	if err := storePeopleOnDisk(path, result); err != nil {
 		return nil, err
 	}
 
@@ -251,11 +199,16 @@ func findRawPersons(
 }
 
 func cleanName(name string) string {
-	return removeParens(name)
+	return strings.TrimSpace(normalizeSpaces(removeParens(name)))
 }
 
 var parensRegex = regexp.MustCompile(`([^\(]+)\s+\(([^\)]+)\)`)
+var spacesRegex = regexp.MustCompile(`\s+`)
 
 func removeParens(name string) string {
 	return parensRegex.ReplaceAllString(name, "$1")
+}
+
+func normalizeSpaces(name string) string {
+	return spacesRegex.ReplaceAllString(name, " ")
 }

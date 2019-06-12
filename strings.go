@@ -1,13 +1,13 @@
 package idmatch
 
 import (
+	"sort"
 	"unicode"
 	"unicode/utf8"
 )
 
 func unique(slice []string) []string {
 	var seen = make(map[string]struct{})
-
 	var result []string
 	for _, s := range slice {
 		if _, ok := seen[s]; ok {
@@ -17,7 +17,7 @@ func unique(slice []string) []string {
 		seen[s] = struct{}{}
 		result = append(result, s)
 	}
-
+	sort.Strings(result)
 	return result
 }
 
