@@ -10,7 +10,7 @@ import (
 // BitBucketMatcher matches emails and BitBucket users.
 type BitBucketMatcher struct {
 	authContext context.Context
-	client *bitbucket.APIClient
+	client      *bitbucket.APIClient
 }
 
 // NewBitBucketMatcher creates a new matcher given a BitBucket personal access token.
@@ -32,7 +32,7 @@ func NewBitBucketMatcher(apiURL, token string) (Matcher, error) {
 func (m BitBucketMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
 	finished := make(chan struct{})
 	go func() {
-		defer func(){ finished <- struct{}{} }()
+		defer func() { finished <- struct{}{} }()
 		var u bitbucket.User
 		var r *http.Response
 		u, r, err = m.client.UsersApi.UsersUsernameGet(m.authContext, email)

@@ -17,21 +17,21 @@ import (
 	idmatch "github.com/src-d/eee-identity-matching"
 	"github.com/src-d/eee-identity-matching/external"
 	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/source"
 	"github.com/xitongsys/parquet-go/writer"
-	"github.com/xitongsys/parquet-go/parquet"
 )
 
 type Args struct {
-	Host string
-	Port uint
-	User string
+	Host     string
+	Port     uint
+	User     string
 	Password string
-	Output string
+	Output   string
 	External string
-	ApiURL string
-	Token string
-	Cache string
+	ApiURL   string
+	Token    string
+	Cache    string
 }
 
 func main() {
@@ -85,7 +85,7 @@ func main() {
 	}
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
-		"path":  args.Output,
+		"path":    args.Output,
 	}).Info("stored people")
 }
 
@@ -103,7 +103,7 @@ func parseArgs() Args {
 	flag.StringVar(&args.User, "user", "root", "gitbase user, normally the default value is fine")
 	flag.StringVar(&args.Password, "password", "", "gitbase password")
 	flag.StringVar(&args.External, "external", "",
-		"enable external service matching, options: " + strings.Join(matchers, ", "))
+		"enable external service matching, options: "+strings.Join(matchers, ", "))
 	flag.StringVar(&args.ApiURL, "api-url", "",
 		"API URL of the external matching service, the blank value means the public website")
 	flag.StringVar(&args.Token, "token", "", "API token for the external matching service")

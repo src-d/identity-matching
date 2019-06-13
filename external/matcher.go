@@ -16,7 +16,7 @@ type MatcherConstructor func(apiURL, token string) (Matcher, error)
 var ErrNoMatches = errors.New("no matches found")
 
 var Matchers = map[string]MatcherConstructor{
-	"github": NewGitHubMatcher,
-	"gitlab": NewGitLabMatcher,
+	"github":    NewGitHubMatcher,
+	"gitlab":    NewGitLabMatcher,
 	"bitbucket": NewBitBucketMatcher,
 }

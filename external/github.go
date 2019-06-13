@@ -46,7 +46,7 @@ var searchOpts = &github.SearchOptions{
 func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
 	finished := make(chan struct{})
 	go func() {
-		defer func(){ finished <- struct{}{} }()
+		defer func() { finished <- struct{}{} }()
 		query := email + " in:email"
 		for { // api rate limit retry loop
 			if isNoReplyEmail(email) {

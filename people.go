@@ -50,7 +50,7 @@ func newPeople(persons []rawPerson) People {
 }
 
 // Merge two persons with the given ids.
-func (p People) Merge(ids... uint64) uint64 {
+func (p People) Merge(ids ...uint64) uint64 {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	p0 := p[ids[0]]
 	for _, id := range ids[1:] {

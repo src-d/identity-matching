@@ -13,8 +13,8 @@ func isIgnoredEmail(s string) bool {
 	parts := strings.Split(s, "@")
 	domain := parts[1]
 	return isIgnoredDomain(domain) ||
-		   isSingleLabelDomain(s) ||
-		   isIPEmail(domain)
+		isSingleLabelDomain(s) ||
+		isIPEmail(domain)
 
 }
 

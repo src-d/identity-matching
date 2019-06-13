@@ -30,7 +30,7 @@ func NewGitLabMatcher(apiURL, token string) (Matcher, error) {
 func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
 	finished := make(chan struct{})
 	go func() {
-		defer func(){ finished <- struct{}{} }()
+		defer func() { finished <- struct{}{} }()
 		opts := &gitlab.ListUsersOptions{Search: &email}
 		for {
 			var users []*gitlab.User
