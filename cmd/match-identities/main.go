@@ -21,14 +21,14 @@ import (
 	"github.com/xitongsys/parquet-go/writer"
 )
 
-type Args struct {
+type cliArgs struct {
 	Host     string
 	Port     uint
 	User     string
 	Password string
 	Output   string
 	External string
-	ApiURL   string
+	APIURL   string
 	Token    string
 	Cache    string
 }
@@ -48,7 +48,7 @@ func main() {
 	var extmatcher external.Matcher
 	if args.External != "" {
 		var err error
-		extmatcher, err = external.Matchers[args.External](args.ApiURL, args.Token)
+		extmatcher, err = external.Matchers[args.External](args.APIURL, args.Token)
 		if err != nil {
 			logrus.Fatalf("failed to initialize %s: %v", args.External, err)
 		}
@@ -88,14 +88,14 @@ func main() {
 	}).Info("stored people")
 }
 
-func parseArgs() Args {
+func parseArgs() cliArgs {
 	var matchers []string
 	for key := range external.Matchers {
 		matchers = append(matchers, key)
 	}
 	sort.Strings(matchers)
 
-	args := Args{}
+	args := cliArgs{}
 	flag.StringVar(&args.Output, "output", "", "path to the parquet file to write")
 	flag.StringVar(&args.Host, "host", "0.0.0.0", "gitbase host")
 	flag.UintVar(&args.Port, "port", 3306, "gitbase port")
@@ -103,7 +103,7 @@ func parseArgs() Args {
 	flag.StringVar(&args.Password, "password", "", "gitbase password")
 	flag.StringVar(&args.External, "external", "",
 		"enable external service matching, options: "+strings.Join(matchers, ", "))
-	flag.StringVar(&args.ApiURL, "api-url", "",
+	flag.StringVar(&args.APIURL, "api-url", "",
 		"API URL of the external matching service, the blank value means the public website")
 	flag.StringVar(&args.Token, "token", "", "API token for the external matching service")
 	flag.StringVar(&args.Cache, "cache", "cache.csv", "Path to the cached raw signatures")

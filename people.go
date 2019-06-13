@@ -22,6 +22,7 @@ type Person struct {
 	emails []string `parquet:"name=emails, type=LIST, valuetype=UTF8"`
 }
 
+// String describes the person's identity parts.
 func (p Person) String() string {
 	return strings.Join(p.names, "|") + "|" + strings.Join(p.emails, "|")
 }
@@ -49,7 +50,7 @@ func newPeople(persons []rawPerson) People {
 	return result
 }
 
-// Merge two persons with the given ids.
+// Merge several persons with the given ids.
 func (p People) Merge(ids ...uint64) uint64 {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	p0 := p[ids[0]]
@@ -63,6 +64,8 @@ func (p People) Merge(ids ...uint64) uint64 {
 	return ids[0]
 }
 
+// ForEach executes a function over each person in the collection.
+// The order is fixed and constant.
 func (p People) ForEach(f func(uint64, *Person) bool) {
 	var keys = make([]uint64, len(p))
 	for k := range p {
@@ -76,8 +79,7 @@ func (p People) ForEach(f func(uint64, *Person) bool) {
 	}
 }
 
-// FindPeople returns all the people in the database or the disk, if it was
-// already cached.
+// FindPeople returns all the people in the database or from the disk cache.
 func FindPeople(ctx context.Context, connString string, cachePath string) (People, error) {
 	persons, err := findRawPersons(ctx, connString, cachePath)
 	if err != nil {
