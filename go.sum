@@ -1,4 +1,6 @@
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
+github.com/apache/thrift v0.12.0 h1:pODnxUFNcjP9UTLZGTdeh+j16A8lJbRvD3rOtrk/7bs=
+github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -6,6 +8,8 @@ github.com/go-sql-driver/mysql v1.4.1 h1:g24URVg0OFbNUTx9qqY1IRZ9D9z3iPyi5zKhQZp
 github.com/go-sql-driver/mysql v1.4.1/go.mod h1:zAC/RDZ24gD3HViQzih4MyKcchzm+sOG5ZlKdlhCg5w=
 github.com/golang/protobuf v1.2.0 h1:P3YflyNX/ehuJFLhxviNdFxQPkGK5cDcApsge1SqnvM=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
+github.com/golang/snappy v0.0.1 h1:Qgr9rKW7uDUkrbSmQeiDsGa8SjGyCOGtuasMWwvp2P4=
+github.com/golang/snappy v0.0.1/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/google/go-github v17.0.0+incompatible h1:N0LgJ1j65A7kfXrZnUDaYCs/Sf4rEjNlfyDHW9dolSY=
 github.com/google/go-github v17.0.0+incompatible/go.mod h1:zLgOLi98H3fifZn+44m+umXrS52loVEgC2AApnigrVQ=
 github.com/google/go-querystring v1.0.0 h1:Xkwi/a1rcvNg1PPYe5vI8GbeBY/jrVuDX5ASuANWTrk=
@@ -28,6 +32,10 @@ github.com/wbrefvem/go-bitbucket v0.0.0-20190128183802-fc08fd046abb h1:KrmaSo+FH
 github.com/wbrefvem/go-bitbucket v0.0.0-20190128183802-fc08fd046abb/go.mod h1:Z91j2jYBApRjJ0zlXDCxPrrZR8ohkkd4g0n+Hqs1w0Q=
 github.com/xanzy/go-gitlab v0.18.0 h1:LybNSWSIw8BK+GnxuETAhUXEzzh5rHsHjopqVkGJXRE=
 github.com/xanzy/go-gitlab v0.18.0/go.mod h1:LSfUQ9OPDnwRqulJk2HcWaAiFfCzaknyeGvjQI67MbE=
+github.com/xitongsys/parquet-go v1.3.0 h1:psKfrDAVz53prerFoVVu6++po53TlMB6bk5OaTe99c0=
+github.com/xitongsys/parquet-go v1.3.0/go.mod h1:on8bl2K/PEouGNEJqxht0t3K4IyN/ABeFu84Hh3lzrE=
+github.com/xitongsys/parquet-go-source v0.0.0-20190611011107-a9b8f78bccbe h1:MixJiEYEN+v6mKpPk4K8TOYKwasceTJOItuBXLERsBY=
+github.com/xitongsys/parquet-go-source v0.0.0-20190611011107-a9b8f78bccbe/go.mod h1:xxCx7Wpym/3QCo6JhujJX51dzSXrwmb0oH6FQb39SEA=
 golang.org/x/crypto v0.0.0-20180904163835-0709b304e793 h1:u+LnwYTOOW7Ukr/fppxEb1Nwz0AtPflrblfvUudpo+I=
 golang.org/x/crypto v0.0.0-20180904163835-0709b304e793/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
 golang.org/x/net v0.0.0-20180724234803-3673e40ba225/go.mod h1:mL1N/T3taQHkDXs73rZJwtUhF3w3ftmwwsq0BUmARs4=

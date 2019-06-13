@@ -18,4 +18,5 @@ var ErrNoMatches = errors.New("no matches found")
 var Matchers = map[string]MatcherConstructor{
 	"github": NewGitHubMatcher,
 	"gitlab": NewGitLabMatcher,
+	"bitbucket": NewBitBucketMatcher,
 }

@@ -1,13 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +16,10 @@ import (
 	flag "github.com/spf13/pflag"
 	idmatch "github.com/src-d/eee-identity-matching"
 	"github.com/src-d/eee-identity-matching/external"
+	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/source"
+	"github.com/xitongsys/parquet-go/writer"
+	"github.com/xitongsys/parquet-go/parquet"
 )
 
 type Args struct {
@@ -36,38 +39,54 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	signals := make(chan os.Signal)
+	defer close(signals)
 	signal.Notify(signals, os.Interrupt, os.Kill)
 	go func() {
 		<-signals
 		cancel()
 	}()
 
-	logrus.Info("looking for people in commits")
-	start := time.Now()
-
-	connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-		args.User, args.Password, args.Host, args.Port, "gitbase")
-	extmatcher, err := external.Matchers[args.External](args.ApiURL, args.Token)
-	if err != nil {
-		logrus.Fatalf("failed to initialize %s: %v", args.External, err)
+	var extmatcher external.Matcher
+	if args.External != "" {
+		var err error
+		extmatcher, err = external.Matchers[args.External](args.ApiURL, args.Token)
+		if err != nil {
+			logrus.Fatalf("failed to initialize %s: %v", args.External, err)
+		}
 	}
 
+	logrus.Info("looking for people in commits")
+	start := time.Now()
+	connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+		args.User, args.Password, args.Host, args.Port, "gitbase")
 	people, err := idmatch.FindPeople(ctx, connStr, args.Cache)
 	if err != nil {
 		logrus.Fatalf("unable to find people: %v", err)
 	}
-
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
 		"people":  len(people),
 	}).Info("found people")
 
+	logrus.Info("reducing people")
+	start = time.Now()
+	if err := idmatch.ReducePeople(people, extmatcher); err != nil {
+		logrus.Fatalf("unable to reduce matches: %s", err)
+	}
+	logrus.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+		"people":  len(people),
+	}).Info("reduced people")
 
+	logrus.Info("storing people")
+	start = time.Now()
 	if err := storeMatches(people, args.Output); err != nil {
 		logrus.Fatalf("unable to store matches: %s", err)
 	}
-
-	close(signals)
+	logrus.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+		"path":  args.Output,
+	}).Info("stored people")
 }
 
 func parseArgs() Args {
@@ -100,22 +119,25 @@ func parseArgs() Args {
 	return args
 }
 
-func storeMatches(people idmatch.People, path string) error {
-	var buf bytes.Buffer
-	people.ForEach(func(_ uint64, p *idmatch.Person) bool {
-		buf.WriteString(p.String())
-		buf.WriteRune('\n')
-		return false
+func storeMatches(people idmatch.People, path string) (err error) {
+	var pf source.ParquetFile
+	pf, err = local.NewLocalFileWriter(path)
+	defer func() {
+		errClose := pf.Close()
+		if err == nil {
+			err = errClose
+		}
+		if err != nil {
+			logrus.Errorf("failed to store the matches to %s: %v", path, err)
+		}
+	}()
+	var pw *writer.ParquetWriter
+	pw, err = writer.NewParquetWriter(pf, new(idmatch.Person), int64(runtime.NumCPU()))
+	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
+	people.ForEach(func(key uint64, val *idmatch.Person) bool {
+		err = pw.Write(*val)
+		return err != nil
 	})
-
-	f, err := os.Create(filepath.Join(path, "identities"))
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(f, &buf); err != nil {
-		return err
-	}
-
-	return f.Close()
+	err = pw.WriteStop()
+	return
 }

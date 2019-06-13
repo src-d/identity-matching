@@ -17,9 +17,9 @@ import (
 
 // Person is a single individual that can have multiple names and emails.
 type Person struct {
-	id     string
-	names  []string
-	emails []string
+	id     string   `parquet:"name=id, type=UTF8"`
+	names  []string `parquet:"name=names, type=LIST, valuetype=UTF8"`
+	emails []string `parquet:"name=emails, type=LIST, valuetype=UTF8"`
 }
 
 func (p Person) String() string {
