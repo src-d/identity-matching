@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGitLabMatcherValidEmail(t *testing.T) {
@@ -12,9 +12,9 @@ func TestGitLabMatcherValidEmail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "vadim@sourced.tech")
-	assert.Equal(t, "vmarkovtsev", user)
-	assert.Equal(t, "Vadim Markovtsev", name)
-	assert.NoError(t, err)
+	require.Equal(t, "vmarkovtsev", user)
+	require.Equal(t, "Vadim Markovtsev", name)
+	require.NoError(t, err)
 }
 
 func TestGitLabMatcherInvalidEmail(t *testing.T) {
@@ -22,7 +22,7 @@ func TestGitLabMatcherInvalidEmail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, _, err := matcher.MatchByEmail(ctx, "vadim-evil-clone@sourced.tech")
-	assert.EqualError(t, err, ErrNoMatches.Error())
+	require.EqualError(t, err, ErrNoMatches.Error())
 }
 
 func TestGitLabMatcherCancel(t *testing.T) {
@@ -30,7 +30,7 @@ func TestGitLabMatcherCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "vadim@sourced.tech")
-	assert.Equal(t, "", user)
-	assert.Equal(t, "", name)
-	assert.Errorf(t, err, context.Canceled.Error())
+	require.Equal(t, "", user)
+	require.Equal(t, "", name)
+	require.Equal(t, context.Canceled, err)
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGitHubMatcherValidEmail(t *testing.T) {
@@ -12,9 +12,9 @@ func TestGitHubMatcherValidEmail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "mcuadros@gmail.com")
-	assert.Equal(t, "mcuadros", user)
-	assert.Equal(t, "Máximo Cuadros", name)
-	assert.NoError(t, err)
+	require.Equal(t, "mcuadros", user)
+	require.Equal(t, "Máximo Cuadros", name)
+	require.NoError(t, err)
 }
 
 // TestGitHubMatcherValidEmailWorkaround checks some strange cases when querying the email
@@ -24,9 +24,9 @@ func TestGitHubMatcherValidEmailWorkaround(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "eiso@sourced.tech")
-	assert.Equal(t, "eiso", user)
-	assert.Equal(t, "Eiso Kant", name)
-	assert.NoError(t, err)
+	require.Equal(t, "eiso", user)
+	require.Equal(t, "Eiso Kant", name)
+	require.NoError(t, err)
 }
 
 func TestGitHubMatcherInvalidEmail(t *testing.T) {
@@ -34,7 +34,7 @@ func TestGitHubMatcherInvalidEmail(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, _, err := matcher.MatchByEmail(ctx, "vadim-evil-clone@sourced.tech")
-	assert.EqualError(t, err, ErrNoMatches.Error())
+	require.EqualError(t, err, ErrNoMatches.Error())
 }
 
 func TestGitHubMatcherCancel(t *testing.T) {
@@ -42,7 +42,7 @@ func TestGitHubMatcherCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "mcuadros@gmail.com")
-	assert.Equal(t, "", user)
-	assert.Equal(t, "", name)
-	assert.Errorf(t, err, context.Canceled.Error())
+	require.Equal(t, "", user)
+	require.Equal(t, "", name)
+	require.Equal(t, context.Canceled, err)
 }

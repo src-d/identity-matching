@@ -5,6 +5,34 @@ import (
 	"strings"
 )
 
+// TODO (zurk): Fill next maps with a proper values
+//  https://github.com/src-d/eee-identity-matching/issues/6
+var popularEmails = map[string]struct{}{
+	"popular@email.com": {},
+}
+
+var popularNames = map[string]struct{}{
+	"popular": {},
+}
+
+var blacklistedEmails = map[string]struct{}{
+	"nobody@android.com": {},
+	"badger@gitter.im":   {},
+}
+
+var ignoredDomains = map[string]struct{}{
+	"localhost.localdomain": {},
+	"example.com":           {},
+	"test.com":              {},
+	"domain.com":            {},
+}
+
+var ignoredNames = map[string]struct{}{
+	"unknown": {},
+	"ubuntu":  {},
+	"admin":   {},
+}
+
 func isIgnoredEmail(s string) bool {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if !strings.Contains(s, "@") || isBlacklistedEmail(s) || isMultipleEmail(s) {
@@ -22,21 +50,19 @@ func isMultipleEmail(s string) bool {
 	return strings.Index(s, "@") != strings.LastIndex(s, "@")
 }
 
-var blacklistedEmails = map[string]struct{}{
-	"nobody@android.com": {},
-	"badger@gitter.im":   {},
+func isPopularEmail(s string) bool {
+	_, ok := popularEmails[s]
+	return ok
+}
+
+func isPopularName(s string) bool {
+	_, ok := popularNames[s]
+	return ok
 }
 
 func isBlacklistedEmail(s string) bool {
 	_, ok := blacklistedEmails[s]
 	return ok
-}
-
-var ignoredDomains = map[string]struct{}{
-	"localhost.localdomain": {},
-	"example.com":           {},
-	"test.com":              {},
-	"domain.com":            {},
 }
 
 func isIgnoredDomain(s string) bool {
@@ -54,12 +80,6 @@ func isIPDomain(s string) bool {
 
 func isSingleLabelDomain(s string) bool {
 	return strings.Count(s, ".") == 0
-}
-
-var ignoredNames = map[string]struct{}{
-	"unknown": {},
-	"ubuntu":  {},
-	"admin":   {},
 }
 
 func isIgnoredName(name string) bool {
