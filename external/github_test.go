@@ -36,3 +36,13 @@ func TestGitHubMatcherInvalidEmail(t *testing.T) {
 	_, _, err := matcher.MatchByEmail(ctx, "vadim-evil-clone@sourced.tech")
 	assert.EqualError(t, err, ErrNoMatches.Error())
 }
+
+func TestGitHubMatcherCancel(t *testing.T) {
+	matcher, _ := NewGitHubMatcher("", "58f7c94cece3b0828426e5d015e8d910169abd2d")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	user, name, err := matcher.MatchByEmail(ctx, "mcuadros@gmail.com")
+	assert.Equal(t, "", user)
+	assert.Equal(t, "", name)
+	assert.Errorf(t, err, context.Canceled.Error())
+}

@@ -13,7 +13,8 @@ type GitLabMatcher struct {
 }
 
 // NewGitLabMatcher creates a new matcher given a GitLab OAuth token.
-func NewGitLabMatcher(apiURL, token string) (GitLabMatcher, error) {
+// https://gitlab.com/profile/personal_access_tokens
+func NewGitLabMatcher(apiURL, token string) (Matcher, error) {
 	if apiURL == "" {
 		apiURL = "https://gitlab.com/api/v4"
 	}
@@ -27,18 +28,32 @@ func NewGitLabMatcher(apiURL, token string) (GitLabMatcher, error) {
 
 // MatchByEmail returns the latest GitLab user with the given email.
 func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
-	opts := &gitlab.ListUsersOptions{Search: &email}
-	for {
-		users, _, err := m.client.Users.ListUsers(opts)
-		if err != nil {
-			// TODO(vmarkovtsev): handle rate limit
-			// https://github.com/xanzy/go-gitlab/issues/630
-			return "", "", err
+	finished := make(chan struct{})
+	go func() {
+		defer func() { finished <- struct{}{} }()
+		opts := &gitlab.ListUsersOptions{Search: &email}
+		for {
+			var users []*gitlab.User
+			users, _, err = m.client.Users.ListUsers(opts)
+			if err != nil {
+				// TODO(vmarkovtsev): handle rate limit
+				// https://github.com/xanzy/go-gitlab/issues/630
+				return
+			}
+			if len(users) == 0 {
+				logrus.Warnf("unable to find users for email: %s", email)
+				err = ErrNoMatches
+				return
+			}
+			user = users[0].Username
+			name = users[0].Name
+			return
 		}
-		if len(users) == 0 {
-			logrus.Warnf("unable to find users for email: %s", email)
-			return "", "", ErrNoMatches
-		}
-		return users[0].Username, users[0].Name, nil
+	}()
+	select {
+	case <-finished:
+		return
+	case <-ctx.Done():
+		return "", "", context.Canceled
 	}
 }

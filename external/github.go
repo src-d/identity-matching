@@ -17,7 +17,8 @@ type GitHubMatcher struct {
 }
 
 // NewGitHubMatcher creates a new matcher given a GitHub token.
-func NewGitHubMatcher(apiURL, token string) (GitHubMatcher, error) {
+// https://github.com/settings/tokens
+func NewGitHubMatcher(apiURL, token string) (Matcher, error) {
 	if apiURL == "" {
 		apiURL = "https://api.github.com/"
 	}
@@ -43,57 +44,60 @@ var searchOpts = &github.SearchOptions{
 
 // MatchByEmail returns the latest GitHub user with the given email.
 func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
-	query := email + " in:email"
-	for {  // api rate limit retry loop
-		if isNoReplyEmail(email) {
-			user = userFromEmail(email)
-		} else {
-			result, _, err := m.client.Search.Users(ctx, query, searchOpts)
+	finished := make(chan struct{})
+	go func() {
+		defer func() { finished <- struct{}{} }()
+		query := email + " in:email"
+		for { // api rate limit retry loop
+			if isNoReplyEmail(email) {
+				user = userFromEmail(email)
+			} else {
+				var result *github.UsersSearchResult
+				result, _, err = m.client.Search.Users(ctx, query, searchOpts)
+				if err != nil {
+					if rl, ok := err.(*github.RateLimitError); ok {
+						logRateLimitError(rl)
+						time.Sleep(rl.Rate.Reset.Sub(time.Now().UTC()))
+						continue
+					}
+					return
+				}
+				if len(result.Users) == 0 {
+					if strings.Contains(query, "@") {
+						// Hacking time! user+domain may work instead of user@domain
+						query = strings.Replace(query, "@", " ", 1)
+						continue
+					}
+					logrus.Warnf("unable to find users for email: %s", email)
+					err = ErrNoMatches
+					return
+				}
+				user = result.Users[0].GetLogin()
+				break
+			}
+		}
+
+		for { // api rate limit retry loop
+			var u *github.User
+			u, _, err = m.client.Users.Get(ctx, user)
 			if err != nil {
 				if rl, ok := err.(*github.RateLimitError); ok {
 					logRateLimitError(rl)
-					select {
-					case <-time.After(rl.Rate.Reset.Sub(time.Now().UTC())):
-					case <-ctx.Done():
-						return "", "", context.Canceled
-					}
-
+					time.Sleep(rl.Rate.Reset.Sub(time.Now().UTC()))
 					continue
 				}
-				return "", "", err
+				return
 			}
-
-			if len(result.Users) == 0 {
-				if strings.Contains(query, "@") {
-					// Hacking time! user+domain may work instead of user@domain
-					query = strings.Replace(query, "@", " ", 1)
-					continue
-				}
-				logrus.Warnf("unable to find users for email: %s", email)
-				return "", "", ErrNoMatches
-			}
-
-			user = result.Users[0].GetLogin()
-			break
+			user = u.GetLogin()
+			name = u.GetName()
+			return
 		}
-	}
-
-	for {  // api rate limit retry loop
-		u, _, err := m.client.Users.Get(ctx, user)
-		if err != nil {
-			if rl, ok := err.(*github.RateLimitError); ok {
-				logRateLimitError(rl)
-				select {
-				case <-time.After(rl.Rate.Reset.Sub(time.Now().UTC())):
-				case <-ctx.Done():
-					return "", "", context.Canceled
-				}
-				continue
-			}
-			return "", "", err
-		}
-
-		return u.GetLogin(), u.GetName(), nil
+	}()
+	select {
+	case <-finished:
+		return
+	case <-ctx.Done():
+		return "", "", context.Canceled
 	}
 }
 
