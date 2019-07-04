@@ -5,9 +5,14 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
+	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/parquet"
+	"github.com/xitongsys/parquet-go/reader"
+	"github.com/xitongsys/parquet-go/writer"
 	"io"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,16 +20,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// rawPerson is taken from a single commit signature with only one name and one email
+type rawPerson struct {
+	repo  string
+	name  string
+	email string
+}
+
 // Person is a single individual that can have multiple names and emails.
 type Person struct {
-	id     string   `parquet:"name=id, type=UTF8"`
-	names  []string `parquet:"name=names, type=LIST, valuetype=UTF8"`
-	emails []string `parquet:"name=emails, type=LIST, valuetype=UTF8"`
+	ID     string   `parquet:"name=id, type=UTF8"`
+	Names  []string `parquet:"name=names, type=LIST, valuetype=UTF8"`
+	Emails []string `parquet:"name=emails, type=LIST, valuetype=UTF8"`
 }
 
 // String describes the person's identity parts.
 func (p Person) String() string {
-	return strings.Join(p.names, "|") + "|" + strings.Join(p.emails, "|")
+	return strings.Join(p.Names, "|") + "|" + strings.Join(p.Emails, "|")
 }
 
 // People is a map of persons indexed by their ID.
@@ -41,13 +53,71 @@ func newPeople(persons []rawPerson) People {
 
 		id++
 		result[id] = &Person{
-			id:     "_" + strconv.FormatUint(id, 10),
-			names:  []string{cleanName(p.name)},
-			emails: []string{p.email},
+			ID:     "_" + strconv.FormatUint(id, 10),
+			Names:  []string{cleanName(p.name)},
+			Emails: []string{p.email},
 		}
 	}
 
 	return result
+}
+
+func toPeople(persons []Person) People {
+	people := make(People, len(persons))
+	for index := range persons {
+		people[uint64(index)+1] = &persons[index]
+	}
+	return people
+}
+
+func readFromParquet(path string) (People, error) {
+	fr, err := local.NewLocalFileReader(path)
+	if err != nil {
+		logrus.Fatal("Read error", err)
+	}
+	defer func() {
+		err = fr.Close()
+		if err != nil {
+			logrus.Fatal("Failed to close the file.", err)
+		}
+	}()
+
+	pr, err := reader.NewParquetReader(fr, new(Person), int64(runtime.NumCPU()))
+	if err != nil {
+		logrus.Fatal("Read error", err)
+	}
+	num := int(pr.GetNumRows())
+	persons := make([]Person, num)
+	if err = pr.Read(&persons); err != nil {
+		logrus.Println("Read error", err)
+	}
+	pr.ReadStop()
+	return toPeople(persons), err
+}
+
+// WriteToParquet saves People structure to parquet file.
+func (p People) WriteToParquet(path string) (err error) {
+	pf, err := local.NewLocalFileWriter(path)
+	defer func() {
+		errClose := pf.Close()
+		if err == nil {
+			err = errClose
+		}
+		if err != nil {
+			logrus.Errorf("failed to store the matches to %s: %v", path, err)
+		}
+	}()
+	pw, err := writer.NewParquetWriter(pf, new(Person), int64(runtime.NumCPU()))
+	if err != nil {
+		logrus.Fatal("Failed to create new parquet writer.", err)
+	}
+	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
+	p.ForEach(func(key uint64, val *Person) bool {
+		err = pw.Write(*val)
+		return err != nil
+	})
+	err = pw.WriteStop()
+	return
 }
 
 // Merge several persons with the given ids.
@@ -55,19 +125,19 @@ func (p People) Merge(ids ...uint64) uint64 {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	p0 := p[ids[0]]
 	for _, id := range ids[1:] {
-		p0.emails = append(p0.emails, p[id].emails...)
-		p0.names = append(p0.names, p[id].names...)
+		p0.Emails = append(p0.Emails, p[id].Emails...)
+		p0.Names = append(p0.Names, p[id].Names...)
 		delete(p, id)
 	}
-	p0.emails = unique(p0.emails)
-	p0.names = unique(p0.names)
+	p0.Emails = unique(p0.Emails)
+	p0.Names = unique(p0.Names)
 	return ids[0]
 }
 
 // ForEach executes a function over each person in the collection.
 // The order is fixed and constant.
 func (p People) ForEach(f func(uint64, *Person) bool) {
-	var keys = make([]uint64, len(p))
+	var keys = make([]uint64, 0, len(p))
 	for k := range p {
 		keys = append(keys, k)
 	}
@@ -94,13 +164,7 @@ SELECT DISTINCT repository_id, commit_author_name, commit_author_email
 FROM commits;
 `
 
-type rawPerson struct {
-	repo  string
-	name  string
-	email string
-}
-
-func readPeopleFromDisk(filePath string) (persons []rawPerson, err error) {
+func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 	var file *os.File
 	file, err = os.Open(filePath)
 	if err != nil {
@@ -113,22 +177,41 @@ func readPeopleFromDisk(filePath string) (persons []rawPerson, err error) {
 		}
 	}()
 
-	reader := csv.NewReader(file)
-	for err == nil {
-		var r []string
-		r, err = reader.Read()
-		if len(r) != 3 {
-			err = fmt.Errorf("invalid CSV record: %s", strings.Join(r, ","))
+	r := csv.NewReader(file)
+	header := make(map[string]int)
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
 		}
-		persons = append(persons, rawPerson{r[0], r[1], r[2]})
+		if err != nil {
+			return nil, err
+		}
+		if len(header) == 0 {
+			if len(record) != 3 {
+				err = fmt.Errorf("invalid CSV file: should have 3 columns")
+				return nil, err
+			}
+			for index, name := range record {
+				header[name] = index
+			}
+		} else {
+			if len(record) != len(header) {
+				err = fmt.Errorf("invalid CSV record: %s", strings.Join(record, ","))
+				return nil, err
+			}
+			persons = append(persons,
+				rawPerson{repo: record[header["repo"]], name: record[header["name"]], email: record[header["email"]]})
+		}
 	}
+
 	if err == io.EOF {
 		err = nil
 	}
 	return
 }
 
-func readPeopleFromDatabase(ctx context.Context, conn string) ([]rawPerson, error) {
+func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, error) {
 	db, err := sql.Open("mysql", conn)
 	if err != nil {
 		return nil, err
@@ -171,6 +254,10 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 			err = writer.Error()
 		}
 	}()
+	err = writer.Write([]string{"repo", "name", "email"})
+	if err != nil {
+		return
+	}
 	for _, p := range result {
 		err = writer.Write([]string{p.repo, p.name, p.email})
 		if err != nil {
@@ -182,13 +269,13 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 
 func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPerson, error) {
 	if _, err := os.Stat(path); err == nil {
-		return readPeopleFromDisk(path)
+		return readRawPersonsFromDisk(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	logrus.Printf("not cached in %s, loading from the database", path)
-	result, err := readPeopleFromDatabase(ctx, connStr)
+	result, err := readRawPersonsFromDatabase(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}

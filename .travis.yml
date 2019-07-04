@@ -6,55 +6,46 @@ go:
   - 1.11.x
   - 1.12.x
 
-matrix:
-  fast_finish: true
-
-before_install:
-  - go get -v golang.org/x/lint/golint
-  - go get -v github.com/haya14busa/goverage
+env:
+  global:
+    - GO111MODULE=on
+    - GOFLAGS="-mod=readonly"
 
 install:
-  - export GO111MODULE=on
-  - go mod download
-  - go build -v github.com/src-d/eee-identity-matching/cmd/match-identities
+  - make dependencies
 
 script:
-  - go vet ./...
-  - lint_warns=$(golint ./... | grep -v vendor/) || true
-  - if [ ! -z "$lint_warns" ]; then echo "$lint_warns"; exit 1; fi
-  - goverage -cpu=1,2 -coverprofile=coverage.txt -covermode=count github.com/src-d/eee-identity-matching/...
-  - sed -i '/assets/d' coverage.txt
+  - make test-coverage
+  # make codecov
+  # uncomment when source{d} has more private repository credits at codecov.io
 
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
+stages:
+  - style
+  - test
+  - name: deploy
+    # require any tag name
+    if: tag =~ .*
 
-jobs:
+matrix:
+  fast_finish: true
   include:
-    - stage: deploy
-      os: osx
+    - stage: style
       go: 1.12.x
-      after_success:
-        - gzip -S .darwin_amd64.gz match-identities
-      script: skip
+      install:
+        - go get -v golang.org/x/lint/golint
+      script:
+        - make check-style
+    - stage: deploy
+      go: 1.12.x
+      install: skip
+      script:
+        - make packages
       deploy:
         provider: releases
+        file_glob: true
         api_key:
           secure: $GITHUB_TOKEN
-        file: "match-identities.darwin_amd64.gz"
-        skip_cleanup: true
-        on:
-          tags: true
-    - stage: deploy
-      os: linux
-      go: 1.12.x
-      script: skip
-      after_success:
-        - gzip -S .linux_amd64.gz match-identities
-      deploy:
-        provider: releases
-        api_key:
-          secure: $GITHUB_TOKEN
-        file: "match-identities.linux_amd64.gz"
+        file: build/*.tar.gz
         skip_cleanup: true
         on:
           tags: true

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -15,10 +14,6 @@ import (
 	flag "github.com/spf13/pflag"
 	idmatch "github.com/src-d/eee-identity-matching"
 	"github.com/src-d/eee-identity-matching/external"
-	"github.com/xitongsys/parquet-go-source/local"
-	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/source"
-	"github.com/xitongsys/parquet-go/writer"
 )
 
 type cliArgs struct {
@@ -79,7 +74,7 @@ func main() {
 
 	logrus.Info("storing people")
 	start = time.Now()
-	if err := storeMatches(people, args.Output); err != nil {
+	if err := people.WriteToParquet(args.Output); err != nil {
 		logrus.Fatalf("unable to store matches: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{
@@ -116,27 +111,4 @@ func parseArgs() cliArgs {
 		}
 	}
 	return args
-}
-
-func storeMatches(people idmatch.People, path string) (err error) {
-	var pf source.ParquetFile
-	pf, err = local.NewLocalFileWriter(path)
-	defer func() {
-		errClose := pf.Close()
-		if err == nil {
-			err = errClose
-		}
-		if err != nil {
-			logrus.Errorf("failed to store the matches to %s: %v", path, err)
-		}
-	}()
-	var pw *writer.ParquetWriter
-	pw, err = writer.NewParquetWriter(pf, new(idmatch.Person), int64(runtime.NumCPU()))
-	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
-	people.ForEach(func(key uint64, val *idmatch.Person) bool {
-		err = pw.Write(*val)
-		return err != nil
-	})
-	err = pw.WriteStop()
-	return
 }
