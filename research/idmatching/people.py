@@ -200,14 +200,14 @@ def identity_matching_pipeline(raw_persons: List[RawPerson],
     print("Email part completed!")
     # Connect components based on names
     print("Name part in progress...")
-    # name2id = people.create_reversed_index(people.people, "name")
-    # for n, group in tqdm(name2id.items(), total=len(name2id)):
-    #     if is_popular_name(n):
-    #         continue
-    #     for elem in group:
-    #         break
-    #     for index in group:
-    #         people.uf.union(elem, index)
+    name2id = people.create_reversed_index(people.people, "name")
+    for n, group in tqdm(name2id.items(), total=len(name2id)):
+        if is_popular_name(n):
+            continue
+        for elem in group:
+            break
+        for index in group:
+            people.uf.union(elem, index)
     # del name2id
     print("Name part completed!")
     # Use connected components to create final identities

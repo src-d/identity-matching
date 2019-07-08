@@ -1,13 +1,15 @@
 from collections import defaultdict
 import operator
+import sys
 from typing import Callable, List
 
 from joblib import Memory
 import pandas as pd
 from tqdm import tqdm
 
-from .filtering import is_ignored_name, is_ignored_email
-from .people import RawPerson, identity_matching_pipeline
+from idmatching import strip_accents
+from idmatching.filtering import is_ignored_name, is_ignored_email
+from idmatching.people import RawPerson, identity_matching_pipeline
 
 
 class CooccurrenceFiltering:
@@ -90,7 +92,14 @@ def prepare_is_blacklisted_function(black_list: List[str], preprocess_value: Cal
 
 def read_names_emails_gids(data_loc: str, use_committer: bool = False):
     data = pd.read_csv(data_loc)
+    if not use_committer:
+        data = data[["author.email", "author.name", "author_id", "repository"]]
     data.dropna(inplace=True)
+    for col_name in data.columns:
+        if col_name == "author_id":
+            continue
+        data[col_name] = data[col_name].map(
+            lambda x: " ".join(strip_accents(x).strip().lower().split()))
     print("Data shape is", data.shape)
 
     emails = data["author.email"].tolist()
@@ -106,13 +115,14 @@ def read_names_emails_gids(data_loc: str, use_committer: bool = False):
 
 def get_preprocessing(lower: bool):
     if lower:
-        return lambda x: x.lower()
-    return lambda x: x
+        return lambda x: ' '.join(x.strip().split()).lower()
+    return lambda x: ' '.join(x.strip().split())
 
 
 def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
              lower_names: bool = True, lower_emails: bool = True,
-             use_committer: bool = False, cache_loc: str = None):
+             use_committer: bool = False, cache_loc: str = None,
+             use_precalculated_popular: bool = True, debug_output = None):
     if cache_loc:
         memory = Memory(cache_loc, verbose=0)
         read_names_emails_gids_cache = memory.cache(read_names_emails_gids)
@@ -129,20 +139,22 @@ def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
     names = list(map(preproces_names, names))
     emails = list(map(preproces_emails, emails))
 
-    # DEBUG
-    # names, emails, github_ids = names[:10000], emails[:10000], github_ids[:10000]
+    if use_precalculated_popular:
+        from idmatching.blacklist import POPULAR_NAMES, POPULAR_EMAILS
+        popular_names = POPULAR_NAMES
+        popular_emails = POPULAR_EMAILS
+    else:
+        # collect popular names and emails
+        popular_names = CooccurrenceFiltering(
+            threshold=name_threshold, threshold_comp=">=",
+            is_ignored_key=is_ignored_name, is_ignored_value=is_ignored_email
+        ).fit(names, emails).popular_keys
 
-    # collect popular names and emails
-    popular_names = CooccurrenceFiltering(
-        threshold=name_threshold, threshold_comp=">=",
-        is_ignored_key=is_ignored_name, is_ignored_value=is_ignored_email
-    ).fit(names, emails).popular_keys
+        popular_emails = CooccurrenceFiltering(
+            threshold=email_threshold, threshold_comp=">=",
+            is_ignored_key=is_ignored_email, is_ignored_value=is_ignored_name
+        ).fit(emails, names).popular_keys
     print("Number of popular names to ignore", len(popular_names))
-
-    popular_emails = CooccurrenceFiltering(
-        threshold=email_threshold, threshold_comp=">=",
-        is_ignored_key=is_ignored_email, is_ignored_value=is_ignored_name
-    ).fit(emails, names).popular_keys
     print("Number of popular emails to ignore", len(popular_emails))
 
     # prepare filtering functions
@@ -154,15 +166,17 @@ def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
     # replace popular names with (name, repository) pair
     for i, (name, repository) in enumerate(zip(names, repositories)):
         if is_ignored_popular_name(name):
-            names[i] = str((name, repository))
+            names[i] = "(%s, %s)" % (name, repository)
 
     popular_names = CooccurrenceFiltering(
         threshold=name_threshold, threshold_comp=">=",
         is_ignored_key=is_ignored_name, is_ignored_value=is_ignored_email
     ).fit(names, emails).popular_keys
-    print("Number of popular names to ignore after replacement", len(popular_names))
-    is_ignored_popular_name = prepare_is_blacklisted_function(black_list=popular_names,
-                                                              preprocess_value=preproces_names)
+    #print("Number of popular names to ignore after replacement", len(popular_names))
+    #is_ignored_popular_name = prepare_is_blacklisted_function(black_list=popular_names,
+    #                                                          preprocess_value=preproces_names)
+    is_ignored_popular_name = lambda *args: False
+
 
     # identity matching
     raw_persons = []
@@ -176,6 +190,13 @@ def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
                                                  is_popular_name=is_ignored_popular_name,
                                                  is_popular_email=is_ignored_popular_email)
 
+    # save result
+    identity2person_to_save = sorted(
+        "%s||%s\n" % ("|".join(sorted(person.names)), "|".join(sorted(person.emails)))
+        for person in identity2person.values())
+    if debug_output:
+        with open(debug_output, "w") as f:
+            f.writelines(identity2person_to_save)
     # evaluation
     # predicted
     name_emails2id = {}
@@ -233,3 +254,13 @@ def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
 
     return avr_prec, avr_rec, avr_f1, wavr_prec, wavr_rec, wavr_f1, identity2person, \
            gid2email_name, raw_persons
+
+
+if __name__ == '__main__':
+    # The Argument is the local path to the file at https://jupyter.k8s.ml.prod.srcd.run
+    # And the path on the server is egorbu/idmatching/data/aggregated_deduplicated.csv
+    data_loc = sys.argv[1]
+    print("Running on aggregated data at %s" % data_loc)
+    cache_loc = "../../../cache"
+    res = pipeline(name_threshold=5, email_threshold=28, data_loc=data_loc,
+                   cache_loc=None, debug_output="python_result")
