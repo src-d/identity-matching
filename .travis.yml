@@ -34,7 +34,7 @@ matrix:
       install:
         - make install-dev-deps
       script:
-        - make check-style
+        - make check-style check-generate
     - stage: deploy
       go: 1.12.x
       install: skip

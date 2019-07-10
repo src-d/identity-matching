@@ -53,7 +53,11 @@ func main() {
 	start := time.Now()
 	connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
 		args.User, args.Password, args.Host, args.Port, "gitbase")
-	people, err := idmatch.FindPeople(ctx, connStr, args.Cache)
+	blacklist, err := idmatch.NewBlacklist()
+	if err != nil {
+		logrus.Fatalf("unable to load the blacklist: %v", err)
+	}
+	people, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist)
 	if err != nil {
 		logrus.Fatalf("unable to find people: %v", err)
 	}
@@ -64,7 +68,7 @@ func main() {
 
 	logrus.Info("reducing people")
 	start = time.Now()
-	if err := idmatch.ReducePeople(people, extmatcher); err != nil {
+	if err := idmatch.ReducePeople(people, extmatcher, blacklist); err != nil {
 		logrus.Fatalf("unable to reduce matches: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{

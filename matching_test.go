@@ -24,7 +24,9 @@ func TestReducePeople(t *testing.T) {
 		6: {ID: "_6", Names: []string{"popular"}, Emails: []string{"email@google.com"}},
 	}
 
-	err := ReducePeople(people, external.BitBucketMatcher{})
+	blacklist := newTestBlacklist(t)
+
+	err := ReducePeople(people, external.BitBucketMatcher{}, blacklist)
 	require.Equal(t, err, nil)
 	require.Equal(t, people, reducedPeople)
 }

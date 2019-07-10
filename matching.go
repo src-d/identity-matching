@@ -23,7 +23,7 @@ func (g node) ID() int64 {
 //
 // The heuristics are:
 // TODO(vmarkovtsev): describe the current approach
-func ReducePeople(people People, ext external.Matcher) error {
+func ReducePeople(people People, ext external.Matcher, blacklist Blacklist) error {
 	// TODO(zurk): implement external matching
 
 	peopleGraph := simple.NewUndirectedGraph()
@@ -35,7 +35,7 @@ func ReducePeople(people People, ext external.Matcher) error {
 	email2id := make(map[string]simplegraph.Node)
 	for index, person := range people {
 		for _, email := range person.Emails {
-			if isPopularEmail(email) {
+			if blacklist.isPopularEmail(email) {
 				continue
 			}
 			if val, ok := email2id[email]; ok {
@@ -50,7 +50,7 @@ func ReducePeople(people People, ext external.Matcher) error {
 	name2id := make(map[string]simplegraph.Node)
 	for index, person := range people {
 		for _, name := range person.Names {
-			if isPopularName(name) {
+			if blacklist.isPopularName(name) {
 				continue
 			}
 			if val, ok := name2id[name]; ok {
