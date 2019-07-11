@@ -16,6 +16,7 @@ class CooccurrenceFiltering:
     """
     Class to count unique values per key given pairs (key, value) and filter them.
     """
+
     def __init__(self, threshold: int, preprocess_value: Callable = None,
                  preprocess_key: Callable = None, threshold_comp: str = ">=",
                  is_ignored_key: Callable = None, is_ignored_value: Callable = None):
@@ -81,7 +82,8 @@ class CooccurrenceFiltering:
 def prepare_is_blacklisted_function(black_list: List[str], preprocess_value: Callable = None) \
         -> Callable:
     if not preprocess_value:
-        preprocess_value = lambda x: x
+        def preprocess_value(x):
+            return x
     blackset = set(black_list)
 
     def is_blacklisted(value):
@@ -122,7 +124,7 @@ def get_preprocessing(lower: bool):
 def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
              lower_names: bool = True, lower_emails: bool = True,
              use_committer: bool = False, cache_loc: str = None,
-             use_precalculated_popular: bool = True, debug_output = None):
+             use_precalculated_popular: bool = True, debug_output=None):
     if cache_loc:
         memory = Memory(cache_loc, verbose=0)
         read_names_emails_gids_cache = memory.cache(read_names_emails_gids)
@@ -172,11 +174,12 @@ def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
         threshold=name_threshold, threshold_comp=">=",
         is_ignored_key=is_ignored_name, is_ignored_value=is_ignored_email
     ).fit(names, emails).popular_keys
-    #print("Number of popular names to ignore after replacement", len(popular_names))
-    #is_ignored_popular_name = prepare_is_blacklisted_function(black_list=popular_names,
+    # print("Number of popular names to ignore after replacement", len(popular_names))
+    # is_ignored_popular_name = prepare_is_blacklisted_function(black_list=popular_names,
     #                                                          preprocess_value=preproces_names)
-    is_ignored_popular_name = lambda *args: False
 
+    def is_ignored_popular_name(*args):
+        return False
 
     # identity matching
     raw_persons = []
@@ -244,16 +247,20 @@ def pipeline(name_threshold: int, email_threshold: int, data_loc: str,
                 f1.append(2 * prec[-1] * rec[-1] / (prec[-1] + rec[-1]))
             cc_size.append(len(identity2person[pid].emails) + len(identity2person[pid].names))
 
-    avr = lambda x: sum(x) / len(x)
+    def avr(x):
+        return sum(x) / len(x)
+
     avr_prec, avr_rec, avr_f1 = avr(prec), avr(rec), avr(f1)
     print("Precision %s, recall %s, f1 %s" % (avr_prec, avr_rec, avr_f1))
 
-    wavr = lambda x, w: sum(x_ * w_ for x_, w_ in zip(x, w)) / sum(w)
+    def wavr(x, w):
+        return sum(x_ * w_ for x_, w_ in zip(x, w)) / sum(w)
+
     wavr_prec, wavr_rec, wavr_f1 = wavr(prec, cc_size), wavr(rec, cc_size), wavr(f1, cc_size)
     print("Precision %s, recall %s, f1 %s" % (wavr_prec, wavr_rec, wavr_f1))
 
     return avr_prec, avr_rec, avr_f1, wavr_prec, wavr_rec, wavr_f1, identity2person, \
-           gid2email_name, raw_persons
+        gid2email_name, raw_persons
 
 
 if __name__ == '__main__':

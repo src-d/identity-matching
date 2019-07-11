@@ -2,9 +2,12 @@ from collections import defaultdict
 from typing import Callable, Mapping, NamedTuple, List, Set
 
 from tqdm import tqdm
-tqdm = lambda *i, **kwargs: i[0]
 
 from idmatching.filtering import is_ignored_email, is_ignored_name
+
+
+def tqdm(*i, **kwargs):
+    return i[0]
 
 
 class Person(NamedTuple):
@@ -78,7 +81,7 @@ class WeightedQuickUnionPathCompressionUF:
 
         :param index: index to check.
         """
-        if not (0 <= index < len(self.parent))  or not (type(index) == int):
+        if not (0 <= index < len(self.parent)) or not (type(index) == int):
             raise ValueError("Not valid index %s with type %s, size of parents list is %s" %
                              (index, type(index), len(self.parent)))
 
@@ -121,8 +124,6 @@ class People(dict):
         self.name2id = defaultdict(set)
         if raw_persons:
             self.update(raw_persons)
-
-
 
     @property
     def people(self):

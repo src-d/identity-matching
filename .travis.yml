@@ -31,6 +31,13 @@ matrix:
   include:
     - stage: style
       go: 1.12.x
+      addons:
+        apt:
+          packages:
+            - python3
+            - python3-pip
+      before_install:
+        - pip --version
       install:
         - make install-dev-deps
       script:
