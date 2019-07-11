@@ -5,10 +5,6 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"fmt"
-	"github.com/xitongsys/parquet-go-source/local"
-	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/reader"
-	"github.com/xitongsys/parquet-go/writer"
 	"io"
 	"os"
 	"regexp"
@@ -16,6 +12,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/xitongsys/parquet-go-source/local"
+	"github.com/xitongsys/parquet-go/parquet"
+	"github.com/xitongsys/parquet-go/reader"
+	"github.com/xitongsys/parquet-go/writer"
 
 	"github.com/sirupsen/logrus"
 )

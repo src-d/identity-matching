@@ -1,9 +1,10 @@
 package idmatch
 
 import (
+	"testing"
+
 	"github.com/src-d/eee-identity-matching/external"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestReducePeople(t *testing.T) {

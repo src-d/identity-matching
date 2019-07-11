@@ -32,7 +32,7 @@ matrix:
     - stage: style
       go: 1.12.x
       install:
-        - go get -v golang.org/x/lint/golint
+        - make install-dev-deps
       script:
         - make check-style
     - stage: deploy
