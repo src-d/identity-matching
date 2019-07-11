@@ -59,14 +59,18 @@ func readFileLinesSet(filename string) (map[string]struct{}, error) {
 	lines := make(map[string]struct{})
 
 	for scanner.Scan() {
-		lines[scanner.Text()] = struct{}{}
+		line := scanner.Text()
+		normLine, _, err := removeDiacritical(line)
+		if err != nil {
+			return nil, err
+		}
+		lines[strings.ToLower(strings.TrimSpace(normalizeSpaces(normLine)))] = struct{}{}
 	}
 
 	return lines, err
 }
 
 func (b Blacklist) isIgnoredEmail(s string) bool {
-	s = strings.ToLower(strings.TrimSpace(s))
 	if !strings.Contains(s, "@") || b.isBlacklistedEmail(s) || isMultipleEmail(s) {
 		return true
 	}

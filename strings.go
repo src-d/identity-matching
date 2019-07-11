@@ -4,6 +4,9 @@ import (
 	"sort"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 func unique(slice []string) []string {
@@ -33,4 +36,12 @@ func stringInSlice(slice []string, s string) bool {
 func isCapitalized(word string) bool {
 	ru, _ := utf8.DecodeRune([]byte(word))
 	return unicode.IsUpper(ru)
+}
+
+func isMn(r rune) bool {
+	return unicode.Is(unicode.Mn, r) // Mn: nonspacing marks
+}
+
+func removeDiacritical(s string) (string, int, error) {
+	return transform.String(transform.Chain(norm.NFD, transform.RemoveFunc(isMn), norm.NFC), s)
 }

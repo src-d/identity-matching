@@ -43,24 +43,36 @@ func (p Person) String() string {
 // People is a map of persons indexed by their ID.
 type People map[uint64]*Person
 
-func newPeople(persons []rawPerson, blacklist Blacklist) People {
+func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 	result := make(People)
 	var id uint64
 
 	for _, p := range persons {
-		if blacklist.isIgnoredName(p.name) || blacklist.isIgnoredEmail(p.email) {
+		name, err := cleanName(p.name)
+		if err != nil {
+			return nil, err
+		}
+		email, err := cleanEmail(p.email)
+		if err != nil {
+			return nil, err
+		}
+		if blacklist.isPopularName(name) {
+			name = fmt.Sprintf("(%s, %s)", name, p.repo)
+		}
+
+		if blacklist.isIgnoredName(name) || blacklist.isIgnoredEmail(email) {
 			continue
 		}
 
 		id++
 		result[id] = &Person{
 			ID:     "_" + strconv.FormatUint(id, 10),
-			Names:  []string{cleanName(p.name)},
-			Emails: []string{p.email},
+			Names:  []string{name},
+			Emails: []string{email},
 		}
 	}
 
-	return result
+	return result, nil
 }
 
 func toPeople(persons []Person) People {
@@ -156,8 +168,11 @@ func FindPeople(ctx context.Context, connString string, cachePath string, blackl
 	if err != nil {
 		return nil, err
 	}
-
-	return newPeople(persons, blacklist), nil
+	people, err := newPeople(persons, blacklist)
+	if err != nil {
+		return nil, err
+	}
+	return people, nil
 }
 
 const findPeopleSQL = `
@@ -180,8 +195,11 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 
 	r := csv.NewReader(file)
 	header := make(map[string]int)
+	rowIndex := 0
 	for {
 		record, err := r.Read()
+		rowIndex++
+
 		if err == io.EOF {
 			break
 		}
@@ -201,8 +219,23 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 				err = fmt.Errorf("invalid CSV record: %s", strings.Join(record, ","))
 				return nil, err
 			}
-			persons = append(persons,
-				rawPerson{repo: record[header["repo"]], name: record[header["name"]], email: record[header["email"]]})
+
+			for key := range header {
+				normValue, _, err := removeDiacritical(record[header[key]])
+				if err != nil {
+					return nil, err
+				}
+				record[header[key]] = strings.TrimSpace(normalizeSpaces(strings.ToLower(normValue)))
+			}
+
+			person := rawPerson{
+				repo:  record[header["repo"]],
+				name:  record[header["name"]],
+				email: record[header["email"]]}
+			if person.repo == "" || person.email == "" || person.name == "" {
+				continue
+			}
+			persons = append(persons, person)
 		}
 	}
 
@@ -288,17 +321,28 @@ func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPers
 	return result, nil
 }
 
-func cleanName(name string) string {
-	return strings.TrimSpace(normalizeSpaces(removeParens(name)))
+func cleanName(name string) (string, error) {
+	name, _, err := removeDiacritical(name)
+	if err != nil {
+		return name, err
+	}
+	return strings.TrimSpace(normalizeSpaces(strings.ToLower(name))), err
+}
+
+func cleanEmail(email string) (string, error) {
+	email, _, err := removeDiacritical(email)
+	if err != nil {
+		return email, err
+	}
+	return strings.TrimSpace(normalizeSpaces(strings.ToLower(email))), err
 }
 
 var parensRegex = regexp.MustCompile(`([^\(]+)\s+\(([^\)]+)\)`)
-var spacesRegex = regexp.MustCompile(`\s+`)
 
 func removeParens(name string) string {
 	return parensRegex.ReplaceAllString(name, "$1")
 }
 
 func normalizeSpaces(name string) string {
-	return spacesRegex.ReplaceAllString(name, " ")
+	return strings.Join(strings.Fields(name), " ")
 }
