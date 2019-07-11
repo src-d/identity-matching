@@ -26,12 +26,12 @@ func TestPeopleNew(t *testing.T) {
 		3: {ID: "_3", Names: []string{"Alice"}, Emails: []string{"alice@google.com"}},
 		4: {ID: "_4", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
 	}
-	require.Equal(t, expected, newPeople(rawPersons))
+	require.Equal(t, expected, newPeople(rawPersons, newTestBlacklist(t)))
 }
 
 func TestTwoPeopleMerge(t *testing.T) {
 	require := require.New(t)
-	people := newPeople(rawPersons)
+	people := newPeople(rawPersons, newTestBlacklist(t))
 	mergedID := people.Merge(1, 2)
 	expected := People{
 		1: {ID: "_1", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
@@ -62,7 +62,7 @@ func TestTwoPeopleMerge(t *testing.T) {
 }
 
 func TestFourPeopleMerge(t *testing.T) {
-	people := newPeople(rawPersons)
+	people := newPeople(rawPersons, newTestBlacklist(t))
 	mergedID := people.Merge(1, 2, 3, 4)
 	expected := People{
 		1: {ID: "_1",
@@ -74,7 +74,7 @@ func TestFourPeopleMerge(t *testing.T) {
 }
 
 func TestPeopleForEach(t *testing.T) {
-	people := newPeople(rawPersons)
+	people := newPeople(rawPersons, newTestBlacklist(t))
 	var keys = make([]uint64, 0, len(people))
 	people.ForEach(func(key uint64, val *Person) bool {
 		keys = append(keys, key)
@@ -116,7 +116,7 @@ func TestFindPeople(t *testing.T) {
 	if err != nil {
 		return
 	}
-	people, err := FindPeople(context.TODO(), "0.0.0.0:3306", peopleFile.Name())
+	people, err := FindPeople(context.TODO(), "0.0.0.0:3306", peopleFile.Name(), newTestBlacklist(t))
 	if err != nil {
 		return
 	}
@@ -166,7 +166,7 @@ func TestWriteAndReadParquet(t *testing.T) {
 	tmpfile, cleanup := tempFile(t, "*.parquet")
 	defer cleanup()
 
-	expectedPeople := newPeople(rawPersons)
+	expectedPeople := newPeople(rawPersons, newTestBlacklist(t))
 
 	err := expectedPeople.WriteToParquet(tmpfile.Name())
 	if err != nil {

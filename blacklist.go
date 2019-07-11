@@ -1,47 +1,80 @@
 package idmatch
 
+//go:generate esc -o blacklists.go -pkg idmatch -prefix blacklists -modtime 1562752805 blacklists
+// -modtime flag is required to make `make check-generate` work.
+// Otherwise, the regenerated file has a different modtime value.
+// `1562752805` corresponds to 2019-07-10 12:00:05 CEST.
 import (
+	"bufio"
+	"compress/gzip"
+	"fmt"
 	"regexp"
 	"strings"
 )
 
-// TODO (zurk): Fill next maps with a proper values
-//  https://github.com/src-d/eee-identity-matching/issues/6
-var popularEmails = map[string]struct{}{
-	"popular@email.com": {},
+// Blacklist contains all the data to filter identities or identities connection
+type Blacklist struct {
+	Domains         map[string]struct{}
+	TopLevelDomains map[string]struct{}
+	Names           map[string]struct{}
+	Emails          map[string]struct{}
+	PopularEmails   map[string]struct{}
+	PopularNames    map[string]struct{}
 }
 
-var popularNames = map[string]struct{}{
-	"popular": {},
+var blacklistFiles = []string{"domains", "top_level_domains", "names", "emails", "popular_emails", "popular_names"}
+
+// NewBlacklist generates Blacklist from the data files embedded to blacklists.go
+func NewBlacklist() (Blacklist, error) {
+	var blacklist []map[string]struct{}
+	for _, name := range blacklistFiles {
+		lines, err := readFileLinesSet(fmt.Sprintf("/%s.csv.gz", name))
+		if err != nil {
+			return Blacklist{}, err
+		}
+		blacklist = append(blacklist, lines)
+	}
+
+	return Blacklist{Domains: blacklist[0], TopLevelDomains: blacklist[1], Names: blacklist[2],
+		Emails: blacklist[3], PopularEmails: blacklist[4], PopularNames: blacklist[5]}, nil
 }
 
-var blacklistedEmails = map[string]struct{}{
-	"nobody@android.com": {},
-	"badger@gitter.im":   {},
+func readFileLinesSet(filename string) (map[string]struct{}, error) {
+	files := FS(false)
+	file, err := files.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err = file.Close()
+	}()
+
+	reader, err := gzip.NewReader(file)
+	if err != nil {
+		return nil, err
+	}
+
+	scanner := bufio.NewScanner(reader)
+	scanner.Split(bufio.ScanLines)
+	lines := make(map[string]struct{})
+
+	for scanner.Scan() {
+		lines[scanner.Text()] = struct{}{}
+	}
+
+	return lines, err
 }
 
-var ignoredDomains = map[string]struct{}{
-	"localhost.localdomain": {},
-	"example.com":           {},
-	"test.com":              {},
-	"domain.com":            {},
-}
-
-var ignoredNames = map[string]struct{}{
-	"unknown": {},
-	"ubuntu":  {},
-	"admin":   {},
-}
-
-func isIgnoredEmail(s string) bool {
+func (b Blacklist) isIgnoredEmail(s string) bool {
 	s = strings.ToLower(strings.TrimSpace(s))
-	if !strings.Contains(s, "@") || isBlacklistedEmail(s) || isMultipleEmail(s) {
+	if !strings.Contains(s, "@") || b.isBlacklistedEmail(s) || isMultipleEmail(s) {
 		return true
 	}
 	parts := strings.Split(s, "@")
 	domain := parts[1]
-	return isIgnoredDomain(domain) ||
-		isSingleLabelDomain(s) ||
+	return b.isIgnoredDomain(domain) ||
+		b.isIgnoredTopLevelDomain(domain) ||
+		isSingleLabelDomain(domain) ||
 		isIPDomain(domain)
 
 }
@@ -50,24 +83,36 @@ func isMultipleEmail(s string) bool {
 	return strings.Index(s, "@") != strings.LastIndex(s, "@")
 }
 
-func isPopularEmail(s string) bool {
-	_, ok := popularEmails[s]
+func (b Blacklist) isPopularEmail(s string) bool {
+	_, ok := b.PopularEmails[s]
 	return ok
 }
 
-func isPopularName(s string) bool {
-	_, ok := popularNames[s]
+func (b Blacklist) isPopularName(s string) bool {
+	_, ok := b.PopularNames[s]
 	return ok
 }
 
-func isBlacklistedEmail(s string) bool {
-	_, ok := blacklistedEmails[s]
+func (b Blacklist) isBlacklistedEmail(s string) bool {
+	_, ok := b.Emails[s]
 	return ok
 }
 
-func isIgnoredDomain(s string) bool {
+func (b Blacklist) isIgnoredDomain(s string) bool {
 	parts := strings.Split(s, "@")
-	_, ok := ignoredDomains[parts[len(parts)-1]]
+	_, ok := b.Domains[parts[len(parts)-1]]
+	return ok
+}
+
+func (b Blacklist) isIgnoredTopLevelDomain(s string) bool {
+	parts := strings.Split(s, "@")
+	topLevelDomain := strings.Split(parts[len(parts)-1], ".")
+	_, ok := b.TopLevelDomains[topLevelDomain[len(topLevelDomain)-1]]
+	return ok
+}
+
+func (b Blacklist) isIgnoredName(name string) bool {
+	_, ok := b.Names[strings.ToLower(name)]
 	return ok
 }
 
@@ -80,9 +125,4 @@ func isIPDomain(s string) bool {
 
 func isSingleLabelDomain(s string) bool {
 	return strings.Count(s, ".") == 0
-}
-
-func isIgnoredName(name string) bool {
-	_, ok := ignoredNames[strings.ToLower(name)]
-	return ok
 }

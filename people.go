@@ -43,12 +43,12 @@ func (p Person) String() string {
 // People is a map of persons indexed by their ID.
 type People map[uint64]*Person
 
-func newPeople(persons []rawPerson) People {
+func newPeople(persons []rawPerson, blacklist Blacklist) People {
 	result := make(People)
 	var id uint64
 
 	for _, p := range persons {
-		if isIgnoredName(p.name) || isIgnoredEmail(p.email) {
+		if blacklist.isIgnoredName(p.name) || blacklist.isIgnoredEmail(p.email) {
 			continue
 		}
 
@@ -151,13 +151,13 @@ func (p People) ForEach(f func(uint64, *Person) bool) {
 }
 
 // FindPeople returns all the people in the database or from the disk cache.
-func FindPeople(ctx context.Context, connString string, cachePath string) (People, error) {
+func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (People, error) {
 	persons, err := findRawPersons(ctx, connString, cachePath)
 	if err != nil {
 		return nil, err
 	}
 
-	return newPeople(persons), nil
+	return newPeople(persons, blacklist), nil
 }
 
 const findPeopleSQL = `
