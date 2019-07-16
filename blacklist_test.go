@@ -90,10 +90,10 @@ func TestIsIPDomain(t *testing.T) {
 	require := require.New(t)
 	for _, ip := range []string{
 		"0.0.0.0", "192.168.0.1", "88.35.10.128", "2001:db8:85a3::8a2e:370:7334", "2001:db8:85a3:0:0:8a2e:370:7334",
-		"2001:db8:85a3::8a2e:370:7334", "0:0:0:0:0:0:0:1"} {
+		"2001:db8:85a3::8a2e:370:7334", "0:0:0:0:0:0:0:1", "blockchaindev34.172.20.180.160"} {
 		require.True(isIPDomain(ip))
 	}
-	for _, ip := range []string{"notip.com", "notip"} {
+	for _, ip := range []string{"notip.com", "notip", "88.131.110"} {
 		require.False(isIPDomain(ip))
 	}
 }

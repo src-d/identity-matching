@@ -21,32 +21,35 @@ var rawPersons = []rawPerson{
 
 func TestPeopleNew(t *testing.T) {
 	expected := People{
-		1: {ID: "_1", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
-		2: {ID: "_2", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
-		3: {ID: "_3", Names: []string{"Alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
+		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		2: {ID: "_2", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		3: {ID: "_3", Names: []string{"alice"}, Emails: []string{"alice@google.com"}},
+		4: {ID: "_4", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
 	}
-	require.Equal(t, expected, newPeople(rawPersons, newTestBlacklist(t)))
+	people, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(t, err)
+	require.Equal(t, expected, people)
 }
 
 func TestTwoPeopleMerge(t *testing.T) {
 	require := require.New(t)
-	people := newPeople(rawPersons, newTestBlacklist(t))
+	people, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(err)
 	mergedID := people.Merge(1, 2)
 	expected := People{
-		1: {ID: "_1", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
-		3: {ID: "_3", Names: []string{"Alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
+		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		3: {ID: "_3", Names: []string{"alice"}, Emails: []string{"alice@google.com"}},
+		4: {ID: "_4", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(uint64(1), mergedID)
 	require.Equal(expected, people)
 
 	mergedID = people.Merge(3, 4)
 	expected = People{
-		1: {ID: "_1", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
+		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
 		3: {ID: "_3",
-			Names:  []string{"Alice", "Bob"},
-			Emails: []string{"Bob@google.com", "alice@google.com"}},
+			Names:  []string{"alice", "bob"},
+			Emails: []string{"alice@google.com", "bob@google.com"}},
 	}
 	require.Equal(uint64(3), mergedID)
 	require.Equal(expected, people)
@@ -54,27 +57,29 @@ func TestTwoPeopleMerge(t *testing.T) {
 	mergedID = people.Merge(1, 3)
 	expected = People{
 		1: {ID: "_1",
-			Names:  []string{"Alice", "Bob"},
-			Emails: []string{"Bob@google.com", "alice@google.com"}},
+			Names:  []string{"alice", "bob"},
+			Emails: []string{"alice@google.com", "bob@google.com"}},
 	}
 	require.Equal(uint64(1), mergedID)
 	require.Equal(expected, people)
 }
 
 func TestFourPeopleMerge(t *testing.T) {
-	people := newPeople(rawPersons, newTestBlacklist(t))
+	people, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(t, err)
 	mergedID := people.Merge(1, 2, 3, 4)
 	expected := People{
 		1: {ID: "_1",
-			Names:  []string{"Alice", "Bob"},
-			Emails: []string{"Bob@google.com", "alice@google.com"}},
+			Names:  []string{"alice", "bob"},
+			Emails: []string{"alice@google.com", "bob@google.com"}},
 	}
 	require.Equal(t, uint64(1), mergedID)
 	require.Equal(t, expected, people)
 }
 
 func TestPeopleForEach(t *testing.T) {
-	people := newPeople(rawPersons, newTestBlacklist(t))
+	people, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(t, err)
 	var keys = make([]uint64, 0, len(people))
 	people.ForEach(func(key uint64, val *Person) bool {
 		keys = append(keys, key)
@@ -105,7 +110,14 @@ func TestFindRawPersons(t *testing.T) {
 	if err != nil {
 		return
 	}
-	require.Equal(t, rawPersons, people)
+	require.Equal(t, []rawPerson{
+		{repo: "repo1", name: "bob", email: "bob@google.com"},
+		{repo: "repo2", name: "bob", email: "bob@google.com"},
+		{repo: "repo1", name: "alice", email: "alice@google.com"},
+		{repo: "repo1", name: "bob", email: "bob@google.com"},
+		{repo: "repo1", name: "bob", email: "bad-email@domen"},
+		{repo: "repo1", name: "admin", email: "someone@google.com"},
+	}, people)
 }
 
 func TestFindPeople(t *testing.T) {
@@ -121,10 +133,10 @@ func TestFindPeople(t *testing.T) {
 		return
 	}
 	expected := People{
-		1: {ID: "_1", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
-		2: {ID: "_2", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
-		3: {ID: "_3", Names: []string{"Alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
+		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		2: {ID: "_2", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		3: {ID: "_3", Names: []string{"alice"}, Emails: []string{"alice@google.com"}},
+		4: {ID: "_4", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(t, expected, people)
 }
@@ -159,16 +171,25 @@ repo1,admin,someone@google.com
 	if err != nil {
 		return
 	}
-	require.Equal(t, rawPersons, personsRead)
+	expectedPersonsRead := []rawPerson{
+		0: {repo: "repo1", name: "bob", email: "bob@google.com"},
+		1: {repo: "repo2", name: "bob", email: "bob@google.com"},
+		2: {repo: "repo1", name: "alice", email: "alice@google.com"},
+		3: {repo: "repo1", name: "bob", email: "bob@google.com"},
+		4: {repo: "repo1", name: "bob", email: "bad-email@domen"},
+		5: {repo: "repo1", name: "admin", email: "someone@google.com"},
+	}
+	require.Equal(t, expectedPersonsRead, personsRead)
 }
 
 func TestWriteAndReadParquet(t *testing.T) {
 	tmpfile, cleanup := tempFile(t, "*.parquet")
 	defer cleanup()
 
-	expectedPeople := newPeople(rawPersons, newTestBlacklist(t))
+	expectedPeople, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(t, err)
 
-	err := expectedPeople.WriteToParquet(tmpfile.Name())
+	err = expectedPeople.WriteToParquet(tmpfile.Name())
 	if err != nil {
 		logrus.Fatal(err)
 	}
@@ -178,9 +199,16 @@ func TestWriteAndReadParquet(t *testing.T) {
 
 func TestCleanName(t *testing.T) {
 	require := require.New(t)
-	require.Equal("name", cleanName("  name"))
-	require.Equal("name name", cleanName("name  	name  "))
-	require.Equal("name name surname", cleanName("name  	name\nsurname"))
+	for _, names := range [][]string{
+		{"  name", "name"},
+		{"name  	name  ", "name name"},
+		{"name  	name\nsurname", "name name surname"},
+		{"name　name", "name name"}, // special space %u3000
+	} {
+		cName, err := cleanName(names[0])
+		require.NoError(err)
+		require.Equal(names[1], cName)
+	}
 }
 
 func TestRemoveParens(t *testing.T) {
@@ -194,6 +222,6 @@ func TestRemoveParens(t *testing.T) {
 func TestNormalizeSpaces(t *testing.T) {
 	require := require.New(t)
 	require.Equal("1 2", normalizeSpaces("1 2"))
-	require.Equal("1 2 ", normalizeSpaces("1  \t  2 \n\n"))
+	require.Equal("1 2", normalizeSpaces("1  \t  2 \n\n"))
 	require.Equal("12", normalizeSpaces("12"))
 }
