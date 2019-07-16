@@ -21,10 +21,10 @@ var rawPersons = []rawPerson{
 
 func TestPeopleNew(t *testing.T) {
 	expected := People{
-		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
-		2: {ID: "_2", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
-		3: {ID: "_3", Names: []string{"alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
+		2: {ID: 2, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"alice", ""}}, Emails: []string{"alice@google.com"}},
+		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	people, err := newPeople(rawPersons, newTestBlacklist(t))
 	require.NoError(t, err)
@@ -37,28 +37,28 @@ func TestTwoPeopleMerge(t *testing.T) {
 	require.NoError(err)
 	mergedID := people.Merge(1, 2)
 	expected := People{
-		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
-		3: {ID: "_3", Names: []string{"alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"alice", ""}}, Emails: []string{"alice@google.com"}},
+		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(uint64(1), mergedID)
 	require.Equal(expected, people)
 
 	mergedID = people.Merge(3, 4)
 	expected = People{
-		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
-		3: {ID: "_3",
-			Names:  []string{"alice", "bob"},
-			Emails: []string{"alice@google.com", "bob@google.com"}},
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
+		3: {ID: 3,
+			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
+			Emails:         []string{"alice@google.com", "bob@google.com"}},
 	}
 	require.Equal(uint64(3), mergedID)
 	require.Equal(expected, people)
 
 	mergedID = people.Merge(1, 3)
 	expected = People{
-		1: {ID: "_1",
-			Names:  []string{"alice", "bob"},
-			Emails: []string{"alice@google.com", "bob@google.com"}},
+		1: {ID: 1,
+			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
+			Emails:         []string{"alice@google.com", "bob@google.com"}},
 	}
 	require.Equal(uint64(1), mergedID)
 	require.Equal(expected, people)
@@ -69,9 +69,9 @@ func TestFourPeopleMerge(t *testing.T) {
 	require.NoError(t, err)
 	mergedID := people.Merge(1, 2, 3, 4)
 	expected := People{
-		1: {ID: "_1",
-			Names:  []string{"alice", "bob"},
-			Emails: []string{"alice@google.com", "bob@google.com"}},
+		1: {ID: 1,
+			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
+			Emails:         []string{"alice@google.com", "bob@google.com"}},
 	}
 	require.Equal(t, uint64(1), mergedID)
 	require.Equal(t, expected, people)
@@ -133,10 +133,10 @@ func TestFindPeople(t *testing.T) {
 		return
 	}
 	expected := People{
-		1: {ID: "_1", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
-		2: {ID: "_2", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
-		3: {ID: "_3", Names: []string{"alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"bob"}, Emails: []string{"bob@google.com"}},
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
+		2: {ID: 2, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"alice", ""}}, Emails: []string{"alice@google.com"}},
+		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(t, expected, people)
 }

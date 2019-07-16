@@ -49,14 +49,14 @@ func ReducePeople(people People, ext external.Matcher, blacklist Blacklist) erro
 	// Add edges by the same unpopular name
 	name2id := make(map[string]simplegraph.Node)
 	for index, person := range people {
-		for _, name := range person.Names {
-			if blacklist.isPopularName(name) {
+		for _, name := range person.NamesWithRepos {
+			if blacklist.isPopularName(name.String()) {
 				continue
 			}
-			if val, ok := name2id[name]; ok {
+			if val, ok := name2id[name.String()]; ok {
 				peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(int64(index))))
 			} else {
-				name2id[name] = peopleGraph.Node(int64(index))
+				name2id[name.String()] = peopleGraph.Node(int64(index))
 			}
 		}
 	}

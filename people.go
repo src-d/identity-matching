@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/xitongsys/parquet-go-source/local"
@@ -28,16 +27,54 @@ type rawPerson struct {
 	email string
 }
 
+// NameWithRepo is a Name that can be linked to a specific repo.
+type NameWithRepo struct {
+	Name string
+	Repo string
+}
+
 // Person is a single individual that can have multiple names and emails.
 type Person struct {
-	ID     string   `parquet:"name=id, type=UTF8"`
-	Names  []string `parquet:"name=names, type=LIST, valuetype=UTF8"`
-	Emails []string `parquet:"name=emails, type=LIST, valuetype=UTF8"`
+	ID             uint64
+	NamesWithRepos []NameWithRepo
+	Emails         []string
+}
+
+func uniqueNamesWithRepo(names []NameWithRepo) []NameWithRepo {
+	seen := map[string]struct{}{}
+	var result []NameWithRepo
+	for _, n := range names {
+		nameStr := n.String()
+		if _, ok := seen[nameStr]; ok {
+			continue
+		}
+
+		seen[nameStr] = struct{}{}
+		result = append(result, n)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].String() < result[j].String()
+	})
+	return result
+}
+
+// String describes the person's identity parts.
+func (rn NameWithRepo) String() string {
+	if rn.Repo == "" {
+		return rn.Name
+	}
+	return fmt.Sprintf("{%s, %s}", rn.Name, rn.Repo)
 }
 
 // String describes the person's identity parts.
 func (p Person) String() string {
-	return strings.Join(p.Names, "|") + "|" + strings.Join(p.Emails, "|")
+	var namesWithRepos []string
+	for _, name := range p.NamesWithRepos {
+		namesWithRepos = append(namesWithRepos, name.String())
+	}
+	sort.Strings(namesWithRepos)
+	sort.Strings(p.Emails)
+	return strings.Join(namesWithRepos, "|") + "||" + strings.Join(p.Emails, "|")
 }
 
 // People is a map of persons indexed by their ID.
@@ -46,6 +83,7 @@ type People map[uint64]*Person
 func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 	result := make(People)
 	var id uint64
+	var nameWithRepo NameWithRepo
 
 	for _, p := range persons {
 		name, err := cleanName(p.name)
@@ -57,7 +95,9 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 			return nil, err
 		}
 		if blacklist.isPopularName(name) {
-			name = fmt.Sprintf("(%s, %s)", name, p.repo)
+			nameWithRepo = NameWithRepo{name, p.repo}
+		} else {
+			nameWithRepo = NameWithRepo{name, ""}
 		}
 
 		if blacklist.isIgnoredName(name) || blacklist.isIgnoredEmail(email) {
@@ -66,21 +106,20 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 
 		id++
 		result[id] = &Person{
-			ID:     "_" + strconv.FormatUint(id, 10),
-			Names:  []string{name},
-			Emails: []string{email},
+			ID:             id,
+			NamesWithRepos: []NameWithRepo{nameWithRepo},
+			Emails:         []string{email},
 		}
 	}
 
 	return result, nil
 }
 
-func toPeople(persons []Person) People {
-	people := make(People, len(persons))
-	for index := range persons {
-		people[uint64(index)+1] = &persons[index]
-	}
-	return people
+type parquetPerson struct {
+	ID    uint64 `parquet:"name=id, type=UINT_64"`
+	Email string `parquet:"name=email, type=UTF8"`
+	Name  string `parquet:"name=name, type=UTF8"`
+	Repo  string `parquet:"name=repo, type=UTF8"`
 }
 
 func readFromParquet(path string) (People, error) {
@@ -95,17 +134,31 @@ func readFromParquet(path string) (People, error) {
 		}
 	}()
 
-	pr, err := reader.NewParquetReader(fr, new(Person), int64(runtime.NumCPU()))
+	pr, err := reader.NewParquetReader(fr, new(parquetPerson), int64(runtime.NumCPU()))
 	if err != nil {
 		logrus.Fatal("Read error", err)
 	}
 	num := int(pr.GetNumRows())
-	persons := make([]Person, num)
-	if err = pr.Read(&persons); err != nil {
+	parquetPersons := make([]parquetPerson, num)
+	if err = pr.Read(&parquetPersons); err != nil {
 		logrus.Println("Read error", err)
+		return nil, err
 	}
 	pr.ReadStop()
-	return toPeople(persons), err
+	people := make(People)
+	for _, person := range parquetPersons {
+		if _, ok := people[person.ID]; !ok {
+			people[person.ID] = &Person{person.ID, nil, nil}
+		}
+		if person.Email != "" {
+			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
+		}
+		if person.Name != "" {
+			people[person.ID].NamesWithRepos = append(people[person.ID].NamesWithRepos,
+				NameWithRepo{person.Name, person.Repo})
+		}
+	}
+	return people, err
 }
 
 // WriteToParquet saves People structure to parquet file.
@@ -120,14 +173,24 @@ func (p People) WriteToParquet(path string) (err error) {
 			logrus.Errorf("failed to store the matches to %s: %v", path, err)
 		}
 	}()
-	pw, err := writer.NewParquetWriter(pf, new(Person), int64(runtime.NumCPU()))
+
+	pw, err := writer.NewParquetWriter(pf, new(parquetPerson), int64(runtime.NumCPU()))
 	if err != nil {
 		logrus.Fatal("Failed to create new parquet writer.", err)
 	}
 	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
 	p.ForEach(func(key uint64, val *Person) bool {
-		err = pw.Write(*val)
-		return err != nil
+		for _, email := range val.Emails {
+			if err := pw.Write(parquetPerson{val.ID, email, "", ""}); err != nil {
+				return true
+			}
+		}
+		for _, name := range val.NamesWithRepos {
+			if err = pw.Write(parquetPerson{val.ID, "", name.Name, name.Repo}); err != nil {
+				return true
+			}
+		}
+		return false
 	})
 	err = pw.WriteStop()
 	return
@@ -139,11 +202,11 @@ func (p People) Merge(ids ...uint64) uint64 {
 	p0 := p[ids[0]]
 	for _, id := range ids[1:] {
 		p0.Emails = append(p0.Emails, p[id].Emails...)
-		p0.Names = append(p0.Names, p[id].Names...)
+		p0.NamesWithRepos = append(p0.NamesWithRepos, p[id].NamesWithRepos...)
 		delete(p, id)
 	}
 	p0.Emails = unique(p0.Emails)
-	p0.Names = unique(p0.Names)
+	p0.NamesWithRepos = uniqueNamesWithRepo(p0.NamesWithRepos)
 	return ids[0]
 }
 
