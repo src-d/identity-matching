@@ -7,8 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var GithubTestToken = "58f7c94cece3b0828426e5d015e8d910169abd2d"
+
 func TestGitHubMatcherValidEmail(t *testing.T) {
-	matcher, _ := NewGitHubMatcher("", "58f7c94cece3b0828426e5d015e8d910169abd2d")
+	matcher, _ := NewGitHubMatcher("", GithubTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "mcuadros@gmail.com")
@@ -20,7 +22,7 @@ func TestGitHubMatcherValidEmail(t *testing.T) {
 // TestGitHubMatcherValidEmailWorkaround checks some strange cases when querying the email
 // directly does not work, however, it is possible to filter by left and right parts.
 func TestGitHubMatcherValidEmailWorkaround(t *testing.T) {
-	matcher, _ := NewGitHubMatcher("", "58f7c94cece3b0828426e5d015e8d910169abd2d")
+	matcher, _ := NewGitHubMatcher("", GithubTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "eiso@sourced.tech")
@@ -30,7 +32,7 @@ func TestGitHubMatcherValidEmailWorkaround(t *testing.T) {
 }
 
 func TestGitHubMatcherInvalidEmail(t *testing.T) {
-	matcher, _ := NewGitHubMatcher("", "58f7c94cece3b0828426e5d015e8d910169abd2d")
+	matcher, _ := NewGitHubMatcher("", GithubTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, _, err := matcher.MatchByEmail(ctx, "vadim-evil-clone@sourced.tech")
@@ -38,7 +40,7 @@ func TestGitHubMatcherInvalidEmail(t *testing.T) {
 }
 
 func TestGitHubMatcherCancel(t *testing.T) {
-	matcher, _ := NewGitHubMatcher("", "58f7c94cece3b0828426e5d015e8d910169abd2d")
+	matcher, _ := NewGitHubMatcher("", GithubTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "mcuadros@gmail.com")
