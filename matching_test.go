@@ -9,19 +9,23 @@ import (
 
 func TestReducePeople(t *testing.T) {
 	var people = People{
-		1: {ID: "_1", Names: []string{"Bob 1"}, Emails: []string{"Bob@google.com"}},
-		2: {ID: "_2", Names: []string{"Bob 2"}, Emails: []string{"Bob@google.com"}},
-		3: {ID: "_3", Names: []string{"Alice"}, Emails: []string{"alice@google.com"}},
-		4: {ID: "_4", Names: []string{"Bob"}, Emails: []string{"Bob@google.com"}},
-		5: {ID: "_5", Names: []string{"popular"}, Emails: []string{"Bob@google.com"}},
-		6: {ID: "_6", Names: []string{"popular"}, Emails: []string{"email@google.com"}},
-		7: {ID: "_7", Names: []string{"Alice"}, Emails: []string{"popular@google.com"}},
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"Bob 1", ""}}, Emails: []string{"Bob@google.com"}},
+		2: {ID: 2, NamesWithRepos: []NameWithRepo{{"Bob 2", ""}}, Emails: []string{"Bob@google.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}}, Emails: []string{"alice@google.com"}},
+		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob@google.com"}},
+		5: {ID: 5, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"Bob@google.com"}},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"}},
+		7: {ID: 7, NamesWithRepos: []NameWithRepo{{"Alice", ""}}, Emails: []string{"popular@google.com"}},
 	}
 
 	var reducedPeople = People{
-		1: {ID: "_1", Names: []string{"Bob", "Bob 1", "Bob 2", "popular"}, Emails: []string{"Bob@google.com"}},
-		3: {ID: "_3", Names: []string{"Alice"}, Emails: []string{"alice@google.com", "popular@google.com"}},
-		6: {ID: "_6", Names: []string{"popular"}, Emails: []string{"email@google.com"}},
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{
+			{"Bob", ""},
+			{"Bob 1", ""},
+			{"Bob 2", ""},
+			{"popular", ""}}, Emails: []string{"Bob@google.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}}, Emails: []string{"alice@google.com", "popular@google.com"}},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"}},
 	}
 
 	blacklist := newTestBlacklist(t)
