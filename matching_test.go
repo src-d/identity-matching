@@ -1,13 +1,14 @@
 package idmatch
 
 import (
+	"os"
 	"testing"
 
 	"github.com/src-d/eee-identity-matching/external"
 	"github.com/stretchr/testify/require"
 )
 
-var GithubTestToken = "58f7c94cece3b0828426e5d015e8d910169abd2d"
+var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")
 
 func TestReducePeople(t *testing.T) {
 	var people = People{
@@ -38,6 +39,9 @@ func TestReducePeople(t *testing.T) {
 }
 
 func TestReducePeopleExternalMatching(t *testing.T) {
+	if githubTestToken == "" {
+		panic("GITHUB_TEST_TOKEN environment variable is not set")
+	}
 	var people = People{
 		1: {ID: 1,
 			NamesWithRepos: []NameWithRepo{{"Máximo Cuadros", ""}},
@@ -61,7 +65,7 @@ func TestReducePeopleExternalMatching(t *testing.T) {
 	}
 
 	blacklist := newTestBlacklist(t)
-	matcher, _ := external.NewGitHubMatcher("", GithubTestToken)
+	matcher, _ := external.NewGitHubMatcher("", githubTestToken)
 
 	err := ReducePeople(people, matcher, blacklist)
 
@@ -70,6 +74,9 @@ func TestReducePeopleExternalMatching(t *testing.T) {
 }
 
 func TestReducePeopleBothMatching(t *testing.T) {
+	if githubTestToken == "" {
+		panic("GITHUB_TEST_TOKEN environment variable is not set")
+	}
 	var people = People{
 		1: {ID: 1,
 			NamesWithRepos: []NameWithRepo{{"Máximo Cuadros", ""}},
@@ -120,7 +127,7 @@ func TestReducePeopleBothMatching(t *testing.T) {
 	}
 
 	blacklist := newTestBlacklist(t)
-	matcher, _ := external.NewGitHubMatcher("", GithubTestToken)
+	matcher, _ := external.NewGitHubMatcher("", githubTestToken)
 
 	err := ReducePeople(people, matcher, blacklist)
 

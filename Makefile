@@ -17,6 +17,10 @@ $(MAKEFILE):
 	git clone --quiet --depth 1 -b $(CI_BRANCH) $(CI_REPOSITORY) $(CI_PATH);
 -include $(MAKEFILE)
 
+export GITHUB_TEST_TOKEN=a7f979a7c45e7d3517ad7eeeb8cba5e16e813aef
+export GITLAB_TEST_TOKEN=RZtZsqZ3FckbHB-YRYzG
+export BITBUCKET_TEST_TOKEN=JOHRfFo9NG2npndvCXmkD82D
+
 fix-style:
 	gofmt -s -w .
 	goimports -w .
