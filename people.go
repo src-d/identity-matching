@@ -35,7 +35,7 @@ type NameWithRepo struct {
 
 // Person is a single individual that can have multiple names and emails.
 type Person struct {
-	ID             uint64
+	ID             int64
 	NamesWithRepos []NameWithRepo
 	Emails         []string
 }
@@ -78,11 +78,11 @@ func (p Person) String() string {
 }
 
 // People is a map of persons indexed by their ID.
-type People map[uint64]*Person
+type People map[int64]*Person
 
 func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 	result := make(People)
-	var id uint64
+	var id int64
 	var nameWithRepo NameWithRepo
 
 	for _, p := range persons {
@@ -116,7 +116,7 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 }
 
 type parquetPerson struct {
-	ID    uint64 `parquet:"name=id, type=UINT_64"`
+	ID    int64  `parquet:"name=id, type=INT_64"`
 	Email string `parquet:"name=email, type=UTF8"`
 	Name  string `parquet:"name=name, type=UTF8"`
 	Repo  string `parquet:"name=repo, type=UTF8"`
@@ -179,7 +179,7 @@ func (p People) WriteToParquet(path string) (err error) {
 		logrus.Fatal("Failed to create new parquet writer.", err)
 	}
 	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
-	p.ForEach(func(key uint64, val *Person) bool {
+	p.ForEach(func(key int64, val *Person) bool {
 		for _, email := range val.Emails {
 			if err := pw.Write(parquetPerson{val.ID, email, "", ""}); err != nil {
 				return true
@@ -197,7 +197,7 @@ func (p People) WriteToParquet(path string) (err error) {
 }
 
 // Merge several persons with the given ids.
-func (p People) Merge(ids ...uint64) uint64 {
+func (p People) Merge(ids ...int64) int64 {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	p0 := p[ids[0]]
 	for _, id := range ids[1:] {
@@ -212,8 +212,8 @@ func (p People) Merge(ids ...uint64) uint64 {
 
 // ForEach executes a function over each person in the collection.
 // The order is fixed and constant.
-func (p People) ForEach(f func(uint64, *Person) bool) {
-	var keys = make([]uint64, 0, len(p))
+func (p People) ForEach(f func(int64, *Person) bool) {
+	var keys = make([]int64, 0, len(p))
 	for k := range p {
 		keys = append(keys, k)
 	}
