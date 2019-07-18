@@ -2,13 +2,22 @@ package external
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+var gitlabTestToken = os.Getenv("GITLAB_TEST_TOKEN")
+
+func init() {
+	if gitlabTestToken == "" {
+		panic("GITLAB_TEST_TOKEN environment variable is not set")
+	}
+}
+
 func TestGitLabMatcherValidEmail(t *testing.T) {
-	matcher, _ := NewGitLabMatcher("", "RZtZsqZ3FckbHB-YRYzG")
+	matcher, _ := NewGitLabMatcher("", gitlabTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "vadim@sourced.tech")
@@ -18,7 +27,7 @@ func TestGitLabMatcherValidEmail(t *testing.T) {
 }
 
 func TestGitLabMatcherInvalidEmail(t *testing.T) {
-	matcher, _ := NewGitLabMatcher("", "RZtZsqZ3FckbHB-YRYzG")
+	matcher, _ := NewGitLabMatcher("", gitlabTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, _, err := matcher.MatchByEmail(ctx, "vadim-evil-clone@sourced.tech")
@@ -26,7 +35,7 @@ func TestGitLabMatcherInvalidEmail(t *testing.T) {
 }
 
 func TestGitLabMatcherCancel(t *testing.T) {
-	matcher, _ := NewGitLabMatcher("", "RZtZsqZ3FckbHB-YRYzG")
+	matcher, _ := NewGitLabMatcher("", gitlabTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	user, name, err := matcher.MatchByEmail(ctx, "vadim@sourced.tech")

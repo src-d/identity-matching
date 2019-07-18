@@ -2,13 +2,22 @@ package external
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
+var bitbucketTestToken = os.Getenv("BITBUCKET_TEST_TOKEN")
+
+func init() {
+	if bitbucketTestToken == "" {
+		panic("BITBUCKET_TEST_TOKEN environment variable is not set")
+	}
+}
+
 func TestBitBucketMatcherMatchByEmail(t *testing.T) {
-	m, err := NewBitBucketMatcher("", "JOHRfFo9NG2npndvCXmkD82D")
+	m, err := NewBitBucketMatcher("", bitbucketTestToken)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -19,7 +28,7 @@ func TestBitBucketMatcherMatchByEmail(t *testing.T) {
 }
 
 func TestBitBucketMatcherInvalidEmail(t *testing.T) {
-	m, err := NewBitBucketMatcher("", "JOHRfFo9NG2npndvCXmkD82D")
+	m, err := NewBitBucketMatcher("", bitbucketTestToken)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -30,7 +39,7 @@ func TestBitBucketMatcherInvalidEmail(t *testing.T) {
 }
 
 func TestBitBucketMatcherCancel(t *testing.T) {
-	m, err := NewBitBucketMatcher("", "JOHRfFo9NG2npndvCXmkD82D")
+	m, err := NewBitBucketMatcher("", bitbucketTestToken)
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
