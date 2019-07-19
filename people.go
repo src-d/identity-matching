@@ -11,13 +11,14 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/briandowns/spinner"
+	"github.com/sirupsen/logrus"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
-
-	"github.com/sirupsen/logrus"
 )
 
 // rawPerson is taken from a single commit signature with only one name and one email
@@ -319,8 +320,14 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 		return nil, err
 	}
 
+	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
+	spin.Start()
+	defer spin.Stop()
 	var result []rawPerson
+	i := 0
 	for rows.Next() {
+		spin.Suffix = fmt.Sprintf(" %d", i+1)
+		i++
 		var repo, name, email string
 		if err := rows.Scan(&repo, &name, &email); err != nil {
 			return nil, err
