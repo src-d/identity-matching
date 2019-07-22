@@ -60,7 +60,7 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) error {
 	peopleGraph := simple.NewUndirectedGraph()
 	for index, person := range people {
-		peopleGraph.AddNode(node{person, int64(index)})
+		peopleGraph.AddNode(node{person, index})
 	}
 
 	unmatchedEmails := map[string]struct{}{}
@@ -86,9 +86,9 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 				continue
 			}
 			if val, ok := email2id[email]; ok {
-				peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(int64(index))))
+				peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(index)))
 			} else {
-				email2id[email] = peopleGraph.Node(int64(index))
+				email2id[email] = peopleGraph.Node(index)
 			}
 		}
 	}
@@ -101,17 +101,17 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 				continue
 			}
 			if val, ok := name2id[name.String()]; ok {
-				peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(int64(index))))
+				peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(index)))
 			} else {
-				name2id[name.String()] = peopleGraph.Node(int64(index))
+				name2id[name.String()] = peopleGraph.Node(index)
 			}
 		}
 	}
 
 	for _, component := range topo.ConnectedComponents(peopleGraph) {
-		var toMerge []uint64
+		var toMerge []int64
 		for _, node := range component {
-			toMerge = append(toMerge, uint64(node.ID()))
+			toMerge = append(toMerge, node.ID())
 		}
 		people.Merge(toMerge...)
 	}

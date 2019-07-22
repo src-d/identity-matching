@@ -41,7 +41,7 @@ func TestTwoPeopleMerge(t *testing.T) {
 		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"alice", ""}}, Emails: []string{"alice@google.com"}},
 		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
-	require.Equal(uint64(1), mergedID)
+	require.Equal(int64(1), mergedID)
 	require.Equal(expected, people)
 
 	mergedID = people.Merge(3, 4)
@@ -51,7 +51,7 @@ func TestTwoPeopleMerge(t *testing.T) {
 			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
 			Emails:         []string{"alice@google.com", "bob@google.com"}},
 	}
-	require.Equal(uint64(3), mergedID)
+	require.Equal(int64(3), mergedID)
 	require.Equal(expected, people)
 
 	mergedID = people.Merge(1, 3)
@@ -60,7 +60,7 @@ func TestTwoPeopleMerge(t *testing.T) {
 			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
 			Emails:         []string{"alice@google.com", "bob@google.com"}},
 	}
-	require.Equal(uint64(1), mergedID)
+	require.Equal(int64(1), mergedID)
 	require.Equal(expected, people)
 }
 
@@ -73,19 +73,19 @@ func TestFourPeopleMerge(t *testing.T) {
 			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
 			Emails:         []string{"alice@google.com", "bob@google.com"}},
 	}
-	require.Equal(t, uint64(1), mergedID)
+	require.Equal(t, int64(1), mergedID)
 	require.Equal(t, expected, people)
 }
 
 func TestPeopleForEach(t *testing.T) {
 	people, err := newPeople(rawPersons, newTestBlacklist(t))
 	require.NoError(t, err)
-	var keys = make([]uint64, 0, len(people))
-	people.ForEach(func(key uint64, val *Person) bool {
+	var keys = make([]int64, 0, len(people))
+	people.ForEach(func(key int64, val *Person) bool {
 		keys = append(keys, key)
 		return false
 	})
-	require.Equal(t, []uint64{1, 2, 3, 4}, keys)
+	require.Equal(t, []int64{1, 2, 3, 4}, keys)
 }
 
 func tempFile(t *testing.T, pattern string) (*os.File, func()) {
