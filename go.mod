@@ -2,6 +2,7 @@ module github.com/src-d/eee-identity-matching
 
 require (
 	github.com/apache/thrift v0.12.0 // indirect
+	github.com/briandowns/spinner v1.6.1
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/go-github v17.0.0+incompatible // indirect
@@ -14,10 +15,10 @@ require (
 	github.com/xanzy/go-gitlab v0.18.0
 	github.com/xitongsys/parquet-go v1.3.0
 	github.com/xitongsys/parquet-go-source v0.0.0-20190611011107-a9b8f78bccbe
+	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/oauth2 v0.0.0-20190219183015-4b83411ed2b3
-	golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223 // indirect
 	golang.org/x/text v0.3.0
-	golang.org/x/tools v0.0.0-20190709211700-7b25e351ac0e // indirect
+	golang.org/x/tools v0.0.0-20190709211700-7b25e351ac0e
 	gonum.org/v1/gonum v0.0.0-20190624220246-e34e6b933b2b
 	gopkg.in/google/go-github.v15 v15.0.0
 )
