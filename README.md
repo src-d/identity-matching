@@ -1,4 +1,7 @@
 # Identity Matching Enterprise Edition Extension
+
+[![Travis build status](https://travis-ci.com/src-d/eee-identity-matching.svg?token=WzaxY77NzbmrefwxuhAh&branch=master)](https://travis-ci.com/src-d/eee-identity-matching)
+
 Match different identities of the same person using 🤖.
 
 [Overview](#overview) • [How To Use](#how-to-use) • [Science](#science) • [Design Document](#design-document)
