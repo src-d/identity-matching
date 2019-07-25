@@ -5,25 +5,24 @@ import (
 	"fmt"
 )
 
-var report = map[string]interface{}{}
+var report = map[string]int{}
 
 // Commit values to the report
 // To print values to stdout use Write function
-func Commit(key string, value interface{}) {
+func Commit(key string, value int) {
 	report[key] = value
 }
 
 // Get value that was previously committed
-func Get(key string) (interface{}, bool) {
+func Get(key string) (int, bool) {
 	val, ok := report[key]
 	return val, ok
 }
 
 // Increment the value under the specified key
-// Works for int values only
 // Returns the new value of the counter.
-func Increment(key string) interface{} {
-	report[key].(int)++
+func Increment(key string) int {
+	report[key]++
 	return report[key]
 }
 
