@@ -14,6 +14,7 @@ import (
 	flag "github.com/spf13/pflag"
 	idmatch "github.com/src-d/eee-identity-matching"
 	"github.com/src-d/eee-identity-matching/external"
+	"github.com/src-d/eee-identity-matching/reporter"
 )
 
 type cliArgs struct {
@@ -85,6 +86,8 @@ func main() {
 		"elapsed": time.Since(start),
 		"path":    args.Output,
 	}).Info("stored people")
+
+	reporter.Write()
 }
 
 func parseArgs() cliArgs {

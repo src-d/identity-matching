@@ -15,6 +15,7 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/sirupsen/logrus"
+	"github.com/src-d/eee-identity-matching/reporter"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
@@ -96,12 +97,21 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 			return nil, err
 		}
 		if blacklist.isPopularName(name) {
+			reporter.Increment("popular names")
 			nameWithRepo = NameWithRepo{name, p.repo}
 		} else {
 			nameWithRepo = NameWithRepo{name, ""}
 		}
 
-		if blacklist.isIgnoredName(name) || blacklist.isIgnoredEmail(email) {
+		ignoredName := blacklist.isIgnoredName(name)
+		ignoredEmail := blacklist.isIgnoredEmail(email)
+		if ignoredName {
+			reporter.Increment("ignored names")
+		}
+		if ignoredEmail {
+			reporter.Increment("ignored emails")
+		}
+		if ignoredEmail || ignoredName {
 			continue
 		}
 
@@ -112,6 +122,7 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 			Emails:         []string{email},
 		}
 	}
+	reporter.Commit("people after filtering", len(result))
 
 	return result, nil
 }
@@ -229,6 +240,7 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 // FindPeople returns all the people in the database or from the disk cache.
 func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (People, error) {
 	persons, err := findRawPersons(ctx, connString, cachePath)
+	reporter.Commit("people found", len(persons))
 	if err != nil {
 		return nil, err
 	}
@@ -384,8 +396,11 @@ func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPers
 		return nil, err
 	}
 
-	if err := storePeopleOnDisk(path, result); err != nil {
-		return nil, err
+	if path != "" {
+		logrus.Printf("Caching the result to %s", path)
+		if err := storePeopleOnDisk(path, result); err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil
@@ -396,7 +411,11 @@ func cleanName(name string) (string, error) {
 	if err != nil {
 		return name, err
 	}
-	return strings.TrimSpace(normalizeSpaces(strings.ToLower(name))), err
+	cleanName := strings.TrimSpace(normalizeSpaces(strings.ToLower(name)))
+	if cleanName == name {
+		reporter.Increment("clean names")
+	}
+	return cleanName, err
 }
 
 func cleanEmail(email string) (string, error) {
@@ -404,7 +423,11 @@ func cleanEmail(email string) (string, error) {
 	if err != nil {
 		return email, err
 	}
-	return strings.TrimSpace(normalizeSpaces(strings.ToLower(email))), err
+	cleanEmail := strings.TrimSpace(normalizeSpaces(strings.ToLower(email)))
+	if cleanEmail == email {
+		reporter.Increment("clean emails")
+	}
+	return cleanEmail, err
 }
 
 var parensRegex = regexp.MustCompile(`([^\(]+)\s+\(([^\)]+)\)`)
