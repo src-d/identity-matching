@@ -58,10 +58,12 @@ func TestReducePeopleExternalMatching(t *testing.T) {
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{
 			{"Máximo", ""},
 			{"Máximo Cuadros", ""}},
-			Emails: []string{"mcuadros@gmail.com"}},
+			Emails:     []string{"mcuadros@gmail.com"},
+			ExternalID: "mcuadros"},
 		3: {ID: 3,
 			NamesWithRepos: []NameWithRepo{{"Konstantin Slavnov", ""}},
-			Emails:         []string{"kslavnov@gmail.com"}},
+			Emails:         []string{"kslavnov@gmail.com"},
+			ExternalID:     "zurk"},
 	}
 
 	blacklist := newTestBlacklist(t)
@@ -104,11 +106,13 @@ func TestReducePeopleBothMatching(t *testing.T) {
 			ID:             0x1,
 			NamesWithRepos: []NameWithRepo{{Name: "Máximo", Repo: ""}, {Name: "Máximo Cuadros", Repo: ""}},
 			Emails:         []string{"mcuadros@gmail.com"},
+			ExternalID:     "mcuadros",
 		},
 		3: {
 			ID:             0x3,
 			NamesWithRepos: []NameWithRepo{{Name: "Konstantin Slavnov", Repo: ""}},
 			Emails:         []string{"kslavnov@ggmail.com", "kslavnov@gmail.com"},
+			ExternalID:     "zurk",
 		},
 		6: {
 			ID: 0x6,

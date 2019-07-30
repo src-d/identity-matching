@@ -79,7 +79,7 @@ func main() {
 
 	logrus.Info("storing people")
 	start = time.Now()
-	if err := people.WriteToParquet(args.Output); err != nil {
+	if err := people.WriteToParquet(args.Output, args.External); err != nil {
 		logrus.Fatalf("unable to store matches: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{
