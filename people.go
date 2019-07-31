@@ -40,6 +40,7 @@ type Person struct {
 	ID             int64
 	NamesWithRepos []NameWithRepo
 	Emails         []string
+	ExternalID     string
 }
 
 func uniqueNamesWithRepo(names []NameWithRepo) []NameWithRepo {
@@ -128,13 +129,15 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 }
 
 type parquetPerson struct {
-	ID    int64  `parquet:"name=id, type=INT_64"`
-	Email string `parquet:"name=email, type=UTF8"`
-	Name  string `parquet:"name=name, type=UTF8"`
-	Repo  string `parquet:"name=repo, type=UTF8"`
+	ID                 int64  `parquet:"name=id, type=INT_64"`
+	Email              string `parquet:"name=email, type=UTF8"`
+	Name               string `parquet:"name=name, type=UTF8"`
+	Repo               string `parquet:"name=repo, type=UTF8"`
+	ExternalIDProvider string `parquet:"name=external_id_provider, type=UTF8"`
+	ExternalID         string `parquet:"name=external_id, type=UTF8"`
 }
 
-func readFromParquet(path string) (People, error) {
+func readFromParquet(path string) (People, string, error) {
 	fr, err := local.NewLocalFileReader(path)
 	if err != nil {
 		logrus.Fatal("Read error", err)
@@ -154,13 +157,14 @@ func readFromParquet(path string) (People, error) {
 	parquetPersons := make([]parquetPerson, num)
 	if err = pr.Read(&parquetPersons); err != nil {
 		logrus.Println("Read error", err)
-		return nil, err
+		return nil, "", err
 	}
 	pr.ReadStop()
 	people := make(People)
+	var externalIDProvider string
 	for _, person := range parquetPersons {
 		if _, ok := people[person.ID]; !ok {
-			people[person.ID] = &Person{person.ID, nil, nil}
+			people[person.ID] = &Person{person.ID, nil, nil, ""}
 		}
 		if person.Email != "" {
 			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
@@ -169,12 +173,26 @@ func readFromParquet(path string) (People, error) {
 			people[person.ID].NamesWithRepos = append(people[person.ID].NamesWithRepos,
 				NameWithRepo{person.Name, person.Repo})
 		}
+		if person.ExternalID != "" {
+			if externalIDProvider != "" && externalIDProvider != person.ExternalIDProvider {
+				return people, externalIDProvider, fmt.Errorf(
+					"there are multiple ExternalIDProvider-s for %s: %s %s",
+					people[person.ID].String(), externalIDProvider, person.ExternalIDProvider)
+			}
+			if people[person.ID].ExternalID != "" && person.ExternalID != people[person.ID].ExternalID {
+				return people, externalIDProvider, fmt.Errorf(
+					"there are multiple usernames for %s: %s %s",
+					people[person.ID].String(), person.ExternalID, people[person.ID].ExternalID)
+			}
+			externalIDProvider = person.ExternalIDProvider
+			people[person.ID].ExternalID = person.ExternalID
+		}
 	}
-	return people, err
+	return people, externalIDProvider, err
 }
 
 // WriteToParquet saves People structure to parquet file.
-func (p People) WriteToParquet(path string) (err error) {
+func (p People) WriteToParquet(path string, externalIDProvider string) (err error) {
 	pf, err := local.NewLocalFileWriter(path)
 	defer func() {
 		errClose := pf.Close()
@@ -190,15 +208,22 @@ func (p People) WriteToParquet(path string) (err error) {
 	if err != nil {
 		logrus.Fatal("Failed to create new parquet writer.", err)
 	}
+	provider := ""
 	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
 	p.ForEach(func(key int64, val *Person) bool {
 		for _, email := range val.Emails {
-			if err := pw.Write(parquetPerson{val.ID, email, "", ""}); err != nil {
+			if val.ExternalID == "" {
+				provider = ""
+			} else {
+				provider = externalIDProvider
+			}
+			if err := pw.Write(parquetPerson{
+				val.ID, email, "", "", provider, val.ExternalID}); err != nil {
 				return true
 			}
 		}
 		for _, name := range val.NamesWithRepos {
-			if err = pw.Write(parquetPerson{val.ID, "", name.Name, name.Repo}); err != nil {
+			if err = pw.Write(parquetPerson{val.ID, "", name.Name, name.Repo, "", ""}); err != nil {
 				return true
 			}
 		}

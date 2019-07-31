@@ -189,12 +189,33 @@ func TestWriteAndReadParquet(t *testing.T) {
 	expectedPeople, err := newPeople(rawPersons, newTestBlacklist(t))
 	require.NoError(t, err)
 
-	err = expectedPeople.WriteToParquet(tmpfile.Name())
+	err = expectedPeople.WriteToParquet(tmpfile.Name(), "")
 	if err != nil {
 		logrus.Fatal(err)
 	}
-	people, err := readFromParquet(tmpfile.Name())
+	people, provider, err := readFromParquet(tmpfile.Name())
 	require.Equal(t, expectedPeople, people)
+	require.Equal(t, "", provider)
+}
+
+func TestWriteAndReadParquetWithExternalID(t *testing.T) {
+	tmpfile, cleanup := tempFile(t, "*.parquet")
+	defer cleanup()
+
+	expectedPeople, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(t, err)
+
+	expectedIDProvider := "test"
+	expectedPeople[1].ExternalID = "username1"
+	expectedPeople[2].ExternalID = "username2"
+
+	err = expectedPeople.WriteToParquet(tmpfile.Name(), expectedIDProvider)
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	people, provider, err := readFromParquet(tmpfile.Name())
+	require.Equal(t, expectedPeople, people)
+	require.Equal(t, expectedIDProvider, provider)
 }
 
 func TestCleanName(t *testing.T) {
