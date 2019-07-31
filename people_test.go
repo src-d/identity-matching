@@ -35,7 +35,7 @@ func TestTwoPeopleMerge(t *testing.T) {
 	require := require.New(t)
 	people, err := newPeople(rawPersons, newTestBlacklist(t))
 	require.NoError(err)
-	mergedID := people.Merge(1, 2)
+	mergedID, err := people.Merge(1, 2)
 	expected := People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"alice", ""}}, Emails: []string{"alice@google.com"}},
@@ -43,8 +43,9 @@ func TestTwoPeopleMerge(t *testing.T) {
 	}
 	require.Equal(int64(1), mergedID)
 	require.Equal(expected, people)
+	require.NoError(err)
 
-	mergedID = people.Merge(3, 4)
+	mergedID, err = people.Merge(3, 4)
 	expected = People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 		3: {ID: 3,
@@ -53,8 +54,9 @@ func TestTwoPeopleMerge(t *testing.T) {
 	}
 	require.Equal(int64(3), mergedID)
 	require.Equal(expected, people)
+	require.NoError(err)
 
-	mergedID = people.Merge(1, 3)
+	mergedID, err = people.Merge(1, 3)
 	expected = People{
 		1: {ID: 1,
 			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
@@ -62,12 +64,13 @@ func TestTwoPeopleMerge(t *testing.T) {
 	}
 	require.Equal(int64(1), mergedID)
 	require.Equal(expected, people)
+	require.NoError(err)
 }
 
 func TestFourPeopleMerge(t *testing.T) {
 	people, err := newPeople(rawPersons, newTestBlacklist(t))
 	require.NoError(t, err)
-	mergedID := people.Merge(1, 2, 3, 4)
+	mergedID, err := people.Merge(1, 2, 3, 4)
 	expected := People{
 		1: {ID: 1,
 			NamesWithRepos: []NameWithRepo{{"alice", ""}, {"bob", ""}},
@@ -75,6 +78,16 @@ func TestFourPeopleMerge(t *testing.T) {
 	}
 	require.Equal(t, int64(1), mergedID)
 	require.Equal(t, expected, people)
+	require.NoError(t, err)
+}
+
+func TestDifferentExternalIdsMerge(t *testing.T) {
+	people, err := newPeople(rawPersons, newTestBlacklist(t))
+	require.NoError(t, err)
+	people[1].ExternalID = "id1"
+	people[2].ExternalID = "id2"
+	_, err = people.Merge(1, 2)
+	require.Error(t, err)
 }
 
 func TestPeopleForEach(t *testing.T) {

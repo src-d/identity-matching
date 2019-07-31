@@ -77,7 +77,8 @@ func (p Person) String() string {
 	}
 	sort.Strings(namesWithRepos)
 	sort.Strings(p.Emails)
-	return strings.Join(namesWithRepos, "|") + "||" + strings.Join(p.Emails, "|")
+	return fmt.Sprintf("%s:%s||%s", p.ExternalID,
+		strings.Join(namesWithRepos, "|"), strings.Join(p.Emails, "|"))
 }
 
 // People is a map of persons indexed by their ID.
@@ -234,17 +235,25 @@ func (p People) WriteToParquet(path string, externalIDProvider string) (err erro
 }
 
 // Merge several persons with the given ids.
-func (p People) Merge(ids ...int64) int64 {
+func (p People) Merge(ids ...int64) (int64, error) {
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	p0 := p[ids[0]]
+	newExternalID := p0.ExternalID
 	for _, id := range ids[1:] {
+		if newExternalID == "" {
+			newExternalID = p[id].ExternalID
+		} else if p[id].ExternalID != "" && p[id].ExternalID != newExternalID {
+			return -1, fmt.Errorf("cannot merge ids %v with different ExternalIDs: %s %s",
+				ids, newExternalID, p[id].ExternalID)
+		}
 		p0.Emails = append(p0.Emails, p[id].Emails...)
 		p0.NamesWithRepos = append(p0.NamesWithRepos, p[id].NamesWithRepos...)
 		delete(p, id)
 	}
 	p0.Emails = unique(p0.Emails)
 	p0.NamesWithRepos = uniqueNamesWithRepo(p0.NamesWithRepos)
-	return ids[0]
+
+	return ids[0], nil
 }
 
 // ForEach executes a function over each person in the collection.
