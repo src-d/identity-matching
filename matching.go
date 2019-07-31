@@ -23,14 +23,13 @@ func (g node) ID() int64 {
 
 // addEdgesWithMatcher adds edges by the groundtruth fetched with external matcher.
 func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
-	matcher external.Matcher) (map[string]struct{}, map[string]string, error) {
+	matcher external.Matcher) (map[string]struct{}, error) {
 	unprocessedEmails := map[string]struct{}{}
 	// Add edges by the groundtruth fetched with external matcher.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	email2extID := make(map[string]simplegraph.Node)
-	email2username := make(map[string]string)
 	for index, person := range people {
 		for _, email := range person.Emails {
 			username, _, err := matcher.MatchByEmail(ctx, email)
@@ -39,10 +38,15 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 					logrus.Warnf("no matches for person %s.", person.String())
 					unprocessedEmails[email] = struct{}{}
 				} else {
-					return unprocessedEmails, email2username, err
+					return unprocessedEmails, err
 				}
 			} else {
-				email2username[email] = username
+				if person.ExternalID != "" && username != person.ExternalID {
+					return unprocessedEmails, fmt.Errorf(
+						"person %s has emails with different external ids: %s %s",
+						person.String(), person.ExternalID, username)
+				}
+				person.ExternalID = username
 				if val, ok := email2extID[username]; ok {
 					peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(int64(index))))
 					reporter.Increment("graph edges")
@@ -55,7 +59,7 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	}
 	reporter.Commit("external API components", len(email2extID))
 	reporter.Commit("external API emails not found", len(unprocessedEmails))
-	return unprocessedEmails, email2username, nil
+	return unprocessedEmails, nil
 }
 
 // ReducePeople merges the identities together by following the fixed set of rules.
@@ -72,10 +76,9 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 	}
 
 	unmatchedEmails := map[string]struct{}{}
-	email2username := map[string]string{}
 	var err error
 	if matcher != nil {
-		unmatchedEmails, email2username, err = addEdgesWithMatcher(people, peopleGraph, matcher)
+		unmatchedEmails, err = addEdgesWithMatcher(people, peopleGraph, matcher)
 		if err != nil {
 			return err
 		}
@@ -116,9 +119,9 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 			for { // this for is to exit with break from the block when required
 				externals, exists := name2id[name.String()]
 				if exists {
-					if externalID, exists := externals[person.ExternalID]; exists {
+					if node, exists := externals[person.ExternalID]; exists {
 						peopleGraph.SetEdge(peopleGraph.NewEdge(
-							externalID, peopleGraph.Node(index)))
+							node, peopleGraph.Node(index)))
 						reporter.Increment("graph edges")
 						break
 					}
@@ -131,29 +134,35 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 			}
 		}
 	}
+
+	// Merge names with only one found external id
+	for _, externalIDs := range name2id {
+		if len(externalIDs) == 2 { // if there is more than 2 externalIDs then there are at least two external id found
+			toMerge := false
+			var edge []simplegraph.Node
+			for externalID, node := range externalIDs {
+				if externalID == "" {
+					toMerge = true
+				}
+				edge = append(edge, node)
+			}
+			if toMerge {
+				peopleGraph.SetEdge(peopleGraph.NewEdge(edge[0], edge[1]))
+			}
+		}
+	}
+
 	reporter.Commit("people matched by name", len(name2id))
 
 	for _, component := range topo.ConnectedComponents(peopleGraph) {
 		var toMerge []int64
-		componentExternalUsername := ""
 		for _, node := range component {
-			id := node.ID()
-			toMerge = append(toMerge, id)
-			for _, email := range people[id].Emails {
-				if username, ok := email2username[email]; ok {
-					if componentExternalUsername == "" {
-						componentExternalUsername = username
-					} else if componentExternalUsername != username {
-						return fmt.Errorf(
-							"Component with person %s has two different external usernames %s and %s",
-							people[id].String(), username, componentExternalUsername)
-					}
-				}
-			}
+			toMerge = append(toMerge, node.ID())
 		}
-		id := people.Merge(toMerge...)
-		people[id].ExternalID = componentExternalUsername
-
+		_, err := people.Merge(toMerge...)
+		if err != nil {
+			return err
+		}
 	}
 	reporter.Commit("people after reduce", len(people))
 
