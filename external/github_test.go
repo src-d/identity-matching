@@ -17,7 +17,6 @@ func init() {
 }
 
 func TestGitHubMatcherValidEmail(t *testing.T) {
-	t.Skip()
 	matcher, _ := NewGitHubMatcher("", githubTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

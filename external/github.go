@@ -3,6 +3,7 @@ package external
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,19 +48,66 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 	finished := make(chan struct{})
 	go func() {
 		defer func() { finished <- struct{}{} }()
+
+		var numFailures uint64
+		const maxNumFailures = 8
+		const (
+			success = 0
+			retry   = 1
+			fail    = 2
+		)
+		check := func(response *github.Response, err error) int {
+			code := response.Response.StatusCode
+			if err == nil && code >= 200 && code < 300 {
+				return success
+			}
+
+			rateLimitHit := false
+			if val, exists := response.Response.Header["X-Ratelimit-Remaining"]; code == 403 &&
+				exists && len(val) == 1 && val[0] == "0" {
+				rateLimitHit = true
+			}
+			if rateLimitHit {
+				t, err := strconv.ParseInt(
+					response.Response.Header["X-Ratelimit-Reset"][0], 10, 64)
+				if err != nil {
+					logrus.Errorf("Bad X-Ratelimit-Reset header: %v. %s",
+						err, response.String())
+					return fail
+				}
+				resetTime := time.Unix(t, 0).Add(time.Second)
+				logrus.Warnf("rate limit was hit, waiting until %s", resetTime.String())
+				time.Sleep(resetTime.Sub(time.Now().UTC()))
+				return retry
+			}
+
+			if err != nil || code >= 500 && code < 600 || code == 408 || code == 429 {
+				sleepTime := time.Duration((1 << numFailures) * int64(time.Second))
+				logrus.Warnf("HTTP %d: %s. %s. Sleeping until %s", code, err, response.String(),
+					time.Now().UTC().Add(sleepTime))
+				time.Sleep(sleepTime)
+				numFailures++
+				if numFailures > maxNumFailures {
+					return fail
+				}
+				return retry
+			}
+			logrus.Warnf("HTTP %d: %s. %s", code, err, response.String())
+			return fail
+		}
+
 		query := email + " in:email"
 		for { // api rate limit retry loop
 			if isNoReplyEmail(email) {
 				user = userFromEmail(email)
 			} else {
 				var result *github.UsersSearchResult
-				result, _, err = m.client.Search.Users(ctx, query, searchOpts)
-				if err != nil {
-					if rl, ok := err.(*github.RateLimitError); ok {
-						logRateLimitError(rl)
-						time.Sleep(rl.Rate.Reset.Sub(time.Now().UTC()))
-						continue
-					}
+				var response *github.Response
+				result, response, err = m.client.Search.Users(ctx, query, searchOpts)
+				status := check(response, err)
+				if status == retry {
+					continue
+				} else if status == fail {
 					return
 				}
 				if len(result.Users) == 0 {
@@ -79,13 +127,12 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 
 		for { // api rate limit retry loop
 			var u *github.User
-			u, _, err = m.client.Users.Get(ctx, user)
-			if err != nil {
-				if rl, ok := err.(*github.RateLimitError); ok {
-					logRateLimitError(rl)
-					time.Sleep(rl.Rate.Reset.Sub(time.Now().UTC()))
-					continue
-				}
+			var response *github.Response
+			u, response, err = m.client.Users.Get(ctx, user)
+			status := check(response, err)
+			if status == retry {
+				continue
+			} else if status == fail {
 				return
 			}
 			user = u.GetLogin()
@@ -114,8 +161,4 @@ func userFromEmail(email string) string {
 	}
 
 	return user
-}
-
-func logRateLimitError(rl *github.RateLimitError) {
-	logrus.Warnf("rate limit was hit, waiting until %s", rl.Rate.Reset)
 }
