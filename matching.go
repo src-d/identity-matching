@@ -25,14 +25,24 @@ func (g node) ID() int64 {
 func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	matcher external.Matcher) (map[string]struct{}, error) {
 	unprocessedEmails := map[string]struct{}{}
+	processedEmails := map[string]string{}
 	// Add edges by the groundtruth fetched with external matcher.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	email2extID := make(map[string]simplegraph.Node)
+	username2extID := make(map[string]simplegraph.Node)
+	var username string
+	var err error
 	for index, person := range people {
 		for _, email := range person.Emails {
-			username, _, err := matcher.MatchByEmail(ctx, email)
+			if val, ok := processedEmails[email]; ok {
+				username = val
+				err = nil
+			} else if _, ok := unprocessedEmails[email]; ok {
+				err = external.ErrNoMatches
+			} else {
+				username, _, err = matcher.MatchByEmail(ctx, email)
+			}
 			if err != nil {
 				if err == external.ErrNoMatches {
 					logrus.Warnf("no matches for person %s.", person.String())
@@ -47,17 +57,18 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 						person.String(), person.ExternalID, username)
 				}
 				person.ExternalID = username
-				if val, ok := email2extID[username]; ok {
+				processedEmails[email] = username
+				if val, ok := username2extID[username]; ok {
 					peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(int64(index))))
 					reporter.Increment("graph edges")
 				} else {
-					email2extID[username] = peopleGraph.Node(int64(index))
+					username2extID[username] = peopleGraph.Node(int64(index))
 				}
 				reporter.Increment("external API emails found")
 			}
 		}
 	}
-	reporter.Commit("external API components", len(email2extID))
+	reporter.Commit("external API components", len(username2extID))
 	reporter.Commit("external API emails not found", len(unprocessedEmails))
 	return unprocessedEmails, nil
 }
