@@ -18,15 +18,16 @@ import (
 )
 
 type cliArgs struct {
-	Host     string
-	Port     uint
-	User     string
-	Password string
-	Output   string
-	External string
-	APIURL   string
-	Token    string
-	Cache    string
+	Host          string
+	Port          uint
+	User          string
+	Password      string
+	Output        string
+	External      string
+	APIURL        string
+	Token         string
+	Cache         string
+	ExternalCache string
 }
 
 func main() {
@@ -47,6 +48,12 @@ func main() {
 		extmatcher, err = external.Matchers[args.External](args.APIURL, args.Token)
 		if err != nil {
 			logrus.Fatalf("failed to initialize %s: %v", args.External, err)
+		}
+		if args.ExternalCache != "" {
+			extmatcher, err = external.NewCachedMatcher(extmatcher, args.ExternalCache)
+			if err != nil {
+				logrus.Fatalf("failed to initialize cached %s: %v", args.External, err)
+			}
 		}
 	}
 
@@ -108,7 +115,9 @@ func parseArgs() cliArgs {
 	flag.StringVar(&args.APIURL, "api-url", "",
 		"API URL of the external matching service, the blank value means the public website")
 	flag.StringVar(&args.Token, "token", "", "API token for the external matching service")
-	flag.StringVar(&args.Cache, "cache", "cache.csv", "Path to the cached raw signatures")
+	flag.StringVar(&args.Cache, "cache", "cache-raw.csv", "Path to the cached raw signatures")
+	flag.StringVar(&args.ExternalCache, "external-cache", "cache-external.csv",
+		"Path to the cached matches found by using an external identity service such as GitHub API.")
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
 
