@@ -11,6 +11,7 @@ import (
 	simplegraph "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/simple"
 	"gonum.org/v1/gonum/graph/topo"
+	"gonum.org/v1/gonum/graph/traverse"
 	"gonum.org/v1/gonum/stat"
 )
 
@@ -31,7 +32,7 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	username2extID := make(map[string]simplegraph.Node)
+	username2extID := make(map[string]node)
 	var username string
 	var err error
 	for index, person := range people {
@@ -52,10 +53,12 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 				}
 				person.ExternalID = username
 				if val, ok := username2extID[username]; ok {
-					peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(int64(index))))
-					reporter.Increment("graph edges")
+					err := setEdge(people, peopleGraph, val, peopleGraph.Node(int64(index)).(node))
+					if err != nil {
+						return unprocessedEmails, nil
+					}
 				} else {
-					username2extID[username] = peopleGraph.Node(int64(index))
+					username2extID[username] = peopleGraph.Node(int64(index)).(node)
 				}
 				reporter.Increment("external API emails found")
 			}
@@ -89,7 +92,7 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 	}
 
 	// Add edges by the same unpopular email
-	email2id := make(map[string]simplegraph.Node)
+	email2id := make(map[string]node)
 	for index, person := range people {
 		for _, email := range person.Emails {
 			if matcher != nil {
@@ -103,17 +106,19 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 				continue
 			}
 			if val, ok := email2id[email]; ok {
-				peopleGraph.SetEdge(peopleGraph.NewEdge(val, peopleGraph.Node(index)))
-				reporter.Increment("graph edges")
+				err = setEdge(people, peopleGraph, val, peopleGraph.Node(index).(node))
+				if err != nil {
+					return err
+				}
 			} else {
-				email2id[email] = peopleGraph.Node(index)
+				email2id[email] = peopleGraph.Node(index).(node)
 			}
 		}
 	}
 	reporter.Commit("people matched by email", len(email2id))
 
 	// Add edges by the same unpopular name
-	name2id := make(map[string]map[string]simplegraph.Node)
+	name2id := make(map[string]map[string]node)
 	for index, person := range people {
 		for _, name := range person.NamesWithRepos {
 			if blacklist.isPopularName(name.String()) {
@@ -123,17 +128,18 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 			for { // this for is to exit with break from the block when required
 				externals, exists := name2id[name.String()]
 				if exists {
-					if node, exists := externals[person.ExternalID]; exists {
-						peopleGraph.SetEdge(peopleGraph.NewEdge(
-							node, peopleGraph.Node(index)))
-						reporter.Increment("graph edges")
+					if n, exists := externals[person.ExternalID]; exists {
+						err = setEdge(people, peopleGraph, n, peopleGraph.Node(index).(node))
+						if err != nil {
+							return err
+						}
 						break
 					}
 				} else {
-					externals = map[string]simplegraph.Node{}
+					externals = map[string]node{}
 					name2id[name.String()] = externals
 				}
-				externals[person.ExternalID] = peopleGraph.Node(index)
+				externals[person.ExternalID] = peopleGraph.Node(index).(node)
 				break
 			}
 		}
@@ -143,7 +149,7 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 	for _, externalIDs := range name2id {
 		if len(externalIDs) == 2 { // if there is more than 2 externalIDs then there are at least two external id found
 			toMerge := false
-			var edge []simplegraph.Node
+			var edge []node
 			for externalID, node := range externalIDs {
 				if externalID == "" {
 					toMerge = true
@@ -151,7 +157,8 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 				edge = append(edge, node)
 			}
 			if toMerge {
-				peopleGraph.SetEdge(peopleGraph.NewEdge(edge[0], edge[1]))
+				err = setEdge(people, peopleGraph, edge[0], edge[1])
+				// err can occur here and it is fine.
 			}
 		}
 	}
@@ -176,5 +183,44 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 	reporter.Commit("connected component size max", floats.Max(componentsSize))
 	reporter.Commit("people after reduce", len(people))
 
+	return nil
+}
+
+// setEdge propagates ExternalID when you connect two components
+func setEdge(people People, graph *simple.UndirectedGraph, node1, node2 node) error {
+	node1ID := node1.ID()
+	node2ID := node2.ID()
+	ExternalID1 := people[node1ID].ExternalID
+	ExternalID2 := people[node2ID].ExternalID
+	if ExternalID1 != "" && ExternalID2 != "" && ExternalID1 != ExternalID2 {
+		return fmt.Errorf(
+			"cannot set edge between nodes with different ExternalIDs: %s %s",
+			ExternalID1, ExternalID2)
+	}
+	var nodeToFix node
+	newExternalID := ""
+	if ExternalID1 == "" && ExternalID2 != "" {
+		newExternalID = ExternalID2
+		nodeToFix = node1
+	} else if ExternalID1 != "" && ExternalID2 == "" {
+		newExternalID = ExternalID1
+		nodeToFix = node2
+	}
+	if newExternalID != "" {
+		var w traverse.DepthFirst
+		w.Walk(graph, nodeToFix, func(sn simplegraph.Node) bool {
+			n := sn.(node)
+			if n.Value.ExternalID != "" && n.Value.ExternalID != newExternalID {
+				panic(fmt.Errorf(
+					"cannot set edge between components with different ExternalIDs: |%s| |%s|",
+					newExternalID, n.Value.ExternalID))
+			}
+			n.Value.ExternalID = newExternalID
+			return false
+		})
+	}
+
+	graph.SetEdge(graph.NewEdge(node1, node2))
+	reporter.Increment("graph edges")
 	return nil
 }
