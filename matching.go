@@ -7,9 +7,11 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/src-d/eee-identity-matching/external"
 	"github.com/src-d/eee-identity-matching/reporter"
+	"gonum.org/v1/gonum/floats"
 	simplegraph "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/simple"
 	"gonum.org/v1/gonum/graph/topo"
+	"gonum.org/v1/gonum/stat"
 )
 
 type node struct {
@@ -156,16 +158,22 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 
 	reporter.Commit("people matched by name", len(name2id))
 
+	var componentsSize []float64
 	for _, component := range topo.ConnectedComponents(peopleGraph) {
 		var toMerge []int64
 		for _, node := range component {
 			toMerge = append(toMerge, node.ID())
 		}
+		componentsSize = append(componentsSize, float64(len(toMerge)))
 		_, err := people.Merge(toMerge...)
 		if err != nil {
 			return err
 		}
 	}
+	mean, std := stat.MeanStdDev(componentsSize, nil)
+	reporter.Commit("connected component size mean", mean)
+	reporter.Commit("connected component size std", std)
+	reporter.Commit("connected component size max", floats.Max(componentsSize))
 	reporter.Commit("people after reduce", len(people))
 
 	return nil
