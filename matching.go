@@ -3,6 +3,7 @@ package idmatch
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/sirupsen/logrus"
 	"github.com/src-d/eee-identity-matching/external"
@@ -23,6 +24,16 @@ type node struct {
 func (g node) ID() int64 {
 	return g.id
 }
+
+// Int64Slice attaches the methods of Interface to []int64, sorting in increasing order.
+type Int64Slice []int64
+
+func (p Int64Slice) Len() int           { return len(p) }
+func (p Int64Slice) Less(i, j int) bool { return p[i] < p[j] }
+func (p Int64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+// Sort is a convenience method.
+func (p Int64Slice) Sort() { sort.Sort(p) }
 
 // addEdgesWithMatcher adds edges by the groundtruth fetched with external matcher.
 func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
@@ -76,7 +87,8 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 //
 // The heuristics are:
 // TODO(vmarkovtsev): describe the current approach
-func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) error {
+func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
+	maxIdentities int) error {
 	peopleGraph := simple.NewUndirectedGraph()
 	for index, person := range people {
 		peopleGraph.AddNode(node{person, index})
@@ -119,7 +131,15 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 
 	// Add edges by the same unpopular name
 	name2id := make(map[string]map[string]node)
-	for index, person := range people {
+	// we need to sort keys because algorithm is order dependent
+	keys := make([]int64, 0, len(people))
+	for k := range people {
+		keys = append(keys, k)
+	}
+	Int64Slice(keys).Sort()
+	for _, index := range keys {
+		person := people[index]
+		iNode := peopleGraph.Node(index).(node)
 		for _, name := range person.NamesWithRepos {
 			if blacklist.isPopularName(name.String()) {
 				reporter.Increment("popular names found")
@@ -129,7 +149,11 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 				externals, exists := name2id[name.String()]
 				if exists {
 					if n, exists := externals[person.ExternalID]; exists {
-						err = setEdge(people, peopleGraph, n, peopleGraph.Node(index).(node))
+						if topo.PathExistsIn(peopleGraph, n, iNode) ||
+							!passIdentitiesLimit(peopleGraph, maxIdentities, iNode, n) {
+							break
+						}
+						err = setEdge(people, peopleGraph, n, iNode)
 						if err != nil {
 							return err
 						}
@@ -139,7 +163,7 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 					externals = map[string]node{}
 					name2id[name.String()] = externals
 				}
-				externals[person.ExternalID] = peopleGraph.Node(index).(node)
+				externals[person.ExternalID] = iNode
 				break
 			}
 		}
@@ -157,6 +181,10 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 				edge = append(edge, node)
 			}
 			if toMerge {
+				if topo.PathExistsIn(peopleGraph, edge[0], edge[1]) ||
+					!passIdentitiesLimit(peopleGraph, maxIdentities, edge[0], edge[1]) {
+					break
+				}
 				err = setEdge(people, peopleGraph, edge[0], edge[1])
 				// err can occur here and it is fine.
 			}
@@ -184,6 +212,18 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist) 
 	reporter.Commit("people after reduce", len(people))
 
 	return nil
+}
+
+func passIdentitiesLimit(graph *simple.UndirectedGraph, maxIdentities int, node1, node2 node) bool {
+	n1Emails, n1Names := componentUniqueEmailsAndNames(graph, node1)
+	n2Emails, n2Names := componentUniqueEmailsAndNames(graph, node2)
+	if n1Emails+n1Names >= maxIdentities || n2Names+n2Emails >= maxIdentities {
+		logrus.Debugf(
+			"Edge is not added between %s (%d emails, %d names) and %s (%d emails, %d names).",
+			node1.Value.String(), n1Emails, n1Names, node2.Value.String(), n2Emails, n2Names)
+		return false
+	}
+	return true
 }
 
 // setEdge propagates ExternalID when you connect two components
@@ -223,4 +263,22 @@ func setEdge(people People, graph *simple.UndirectedGraph, node1, node2 node) er
 	graph.SetEdge(graph.NewEdge(node1, node2))
 	reporter.Increment("graph edges")
 	return nil
+}
+
+// componentUniqueEmailsAndNames calculates the number of unique emails and names in the component
+// with n node inside
+func componentUniqueEmailsAndNames(graph *simple.UndirectedGraph, n simplegraph.Node) (int, int) {
+	emails := map[string]struct{}{}
+	names := map[string]struct{}{}
+	var w traverse.DepthFirst
+	w.Walk(graph, n, func(sn simplegraph.Node) bool {
+		for _, email := range sn.(node).Value.Emails {
+			emails[email] = struct{}{}
+		}
+		for _, name := range sn.(node).Value.NamesWithRepos {
+			names[name.String()] = struct{}{}
+		}
+		return false
+	})
+	return len(emails), len(names)
 }
