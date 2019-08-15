@@ -28,6 +28,7 @@ type cliArgs struct {
 	Token         string
 	Cache         string
 	ExternalCache string
+	MaxIdentities int
 }
 
 func main() {
@@ -76,7 +77,7 @@ func main() {
 
 	logrus.Info("reducing people")
 	start = time.Now()
-	if err := idmatch.ReducePeople(people, extmatcher, blacklist); err != nil {
+	if err := idmatch.ReducePeople(people, extmatcher, blacklist, args.MaxIdentities); err != nil {
 		logrus.Fatalf("unable to reduce matches: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{
@@ -118,6 +119,10 @@ func parseArgs() cliArgs {
 	flag.StringVar(&args.Cache, "cache", "cache-raw.csv", "Path to the cached raw signatures")
 	flag.StringVar(&args.ExternalCache, "external-cache", "cache-external.csv",
 		"Path to the cached matches found by using an external identity service such as GitHub API.")
+	flag.IntVar(&args.MaxIdentities, "max-identities", 20,
+		"If a person has more than this number of unique names and unique emails summed, "+
+			"no more identities will be merged. If the identities are matched by an external API "+
+			"or by email this limitation can be violated.")
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
 

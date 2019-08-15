@@ -2,14 +2,14 @@ package idmatch
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/src-d/eee-identity-matching/external"
 	"github.com/stretchr/testify/require"
 )
 
-var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")
+//var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")
+var githubTestToken = "a7f979a7c45e7d3517ad7eeeb8cba5e16e813aef"
 
 func TestReducePeople(t *testing.T) {
 	var people = People{
@@ -34,9 +34,46 @@ func TestReducePeople(t *testing.T) {
 
 	blacklist := newTestBlacklist(t)
 
-	err := ReducePeople(people, nil, blacklist)
+	err := ReducePeople(people, nil, blacklist, 100)
 	require.Equal(t, err, nil)
 	require.Equal(t, people, reducedPeople)
+}
+
+func TestReducePeopleMaxIdentities(t *testing.T) {
+	var people = People{
+		1:  {ID: 1, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob2@google.com"}},
+		2:  {ID: 2, NamesWithRepos: []NameWithRepo{{"Bob 1", ""}}, Emails: []string{"Bob@google.com"}},
+		3:  {ID: 3, NamesWithRepos: []NameWithRepo{{"Bob 2", ""}}, Emails: []string{"Bob@google.com"}},
+		4:  {ID: 4, NamesWithRepos: []NameWithRepo{{"Bob 3", ""}}, Emails: []string{"Bob@google.com"}},
+		5:  {ID: 5, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob@google.com"}},
+		6:  {ID: 6, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob3@google.com"}},
+		7:  {ID: 7, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob4@google.com"}},
+		8:  {ID: 8, NamesWithRepos: []NameWithRepo{{"Alice 1", ""}}, Emails: []string{"alice@google.com"}},
+		9:  {ID: 9, NamesWithRepos: []NameWithRepo{{"Alice 2", ""}}, Emails: []string{"alice@google.com"}},
+		10: {ID: 10, NamesWithRepos: []NameWithRepo{{"Alice 2", ""}}, Emails: []string{"alice1@google.com"}},
+	}
+
+	var reducedPeople = People{
+		1: {ID: 1,
+			NamesWithRepos: []NameWithRepo{{"Bob", ""}},
+			Emails:         []string{"Bob2@google.com", "Bob3@google.com", "Bob4@google.com"}},
+		2: {ID: 2,
+			NamesWithRepos: []NameWithRepo{
+				{"Bob", ""},
+				{"Bob 1", ""},
+				{"Bob 2", ""},
+				{"Bob 3", ""}},
+			Emails: []string{"Bob@google.com"}},
+		8: {ID: 8,
+			NamesWithRepos: []NameWithRepo{{"Alice 1", ""}, {"Alice 2", ""}},
+			Emails:         []string{"alice1@google.com", "alice@google.com"}},
+	}
+
+	blacklist := newTestBlacklist(t)
+
+	err := ReducePeople(people, nil, blacklist, 4)
+	require.Equal(t, err, nil)
+	require.Equal(t, reducedPeople, people)
 }
 
 func TestReducePeopleExternalMatching(t *testing.T) {
@@ -70,7 +107,7 @@ func TestReducePeopleExternalMatching(t *testing.T) {
 	blacklist := newTestBlacklist(t)
 	matcher, _ := external.NewGitHubMatcher("", githubTestToken)
 
-	err := ReducePeople(people, matcher, blacklist)
+	err := ReducePeople(people, matcher, blacklist, 100)
 
 	require.Equal(t, err, nil)
 	require.Equal(t, people, reducedPeople)
@@ -134,7 +171,7 @@ func TestReducePeopleBothMatching(t *testing.T) {
 	blacklist := newTestBlacklist(t)
 	matcher, _ := external.NewGitHubMatcher("", githubTestToken)
 
-	err := ReducePeople(people, matcher, blacklist)
+	err := ReducePeople(people, matcher, blacklist, 100)
 
 	require.Equal(t, err, nil)
 	require.Equal(t, people, reducedPeople)
@@ -204,7 +241,7 @@ func TestReducePeopleBothMatchingDifferentExternalIdsNoMerge(t *testing.T) {
 	blacklist := newTestBlacklist(t)
 	matcher, _ := external.NewGitHubMatcher("", githubTestToken)
 
-	err := ReducePeople(people, matcher, blacklist)
+	err := ReducePeople(people, matcher, blacklist, 100)
 
 	require.Equal(t, err, nil)
 	require.Equal(t, people, reducedPeople)
@@ -247,7 +284,7 @@ func TestReducePeopleSameNameDifferentExternalIds(t *testing.T) {
 
 	blacklist := newTestBlacklist(t)
 
-	err := ReducePeople(people, TestMatcher{}, blacklist)
+	err := ReducePeople(people, TestMatcher{}, blacklist, 100)
 	require.Equal(t, err, nil)
 	require.Equal(t, people, reducedPeople)
 }
