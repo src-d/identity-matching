@@ -29,6 +29,13 @@ type cliArgs struct {
 	Cache         string
 	ExternalCache string
 	MaxIdentities int
+	OutputFormat  string
+	PgHost        string
+	PgPort        string
+	PgUser        string
+	PgPassword    string
+	PgDb          string
+	PgTable       string
 }
 
 func main() {
@@ -87,13 +94,28 @@ func main() {
 
 	logrus.Info("storing people")
 	start = time.Now()
-	if err := people.WriteToParquet(args.Output, args.External); err != nil {
-		logrus.Fatalf("unable to store matches: %s", err)
+	if args.OutputFormat == "parquet" {
+		if err := people.WriteToParquet(args.Output, args.External); err != nil {
+			logrus.Fatalf("unable to store matches: %s", err)
+		}
+		logrus.WithFields(logrus.Fields{
+			"elapsed": time.Since(start),
+			"path":    args.Output,
+		}).Info("stored people")
+	} else {
+		if err := people.WriteToPostgres(args.PgHost, args.PgPort, args.PgUser, args.PgPassword, args.PgDb,
+			args.PgTable, args.External); err != nil {
+			logrus.Fatalf("unable to write to postgres: %s", err)
+		}
+		logrus.WithFields(logrus.Fields{
+			"elapsed":       time.Since(start),
+			"posgressHost":  args.PgHost,
+			"posgressPost":  args.PgPort,
+			"posgressUser":  args.PgUser,
+			"posgressDB":    args.PgDb,
+			"posgressTable": args.PgTable,
+		}).Info("stored people")
 	}
-	logrus.WithFields(logrus.Fields{
-		"elapsed": time.Since(start),
-		"path":    args.Output,
-	}).Info("stored people")
 
 	reporter.Write()
 }
@@ -123,6 +145,14 @@ func parseArgs() cliArgs {
 		"If a person has more than this number of unique names and unique emails summed, "+
 			"no more identities will be merged. If the identities are matched by an external API "+
 			"or by email this limitation can be violated.")
+	flag.StringVar(&args.OutputFormat, "output-format", "postgres",
+		"Output format options are postgres or parquet.")
+	flag.StringVar(&args.PgHost, "pg-host", "0.0.0.0", "Postgres database host address.")
+	flag.StringVar(&args.PgPort, "pg-port", "5432", "Postgres database port.")
+	flag.StringVar(&args.PgUser, "pg-user", "superset", "Postgres database username.")
+	flag.StringVar(&args.PgPassword, "pg-pass", "superset", "Postgres database password.")
+	flag.StringVar(&args.PgDb, "pg-db", "superset", "Postgres database name.")
+	flag.StringVar(&args.PgTable, "pg-table", "identities", "Postgres table name.")
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
 
@@ -130,6 +160,10 @@ func parseArgs() cliArgs {
 		if _, exists := external.Matchers[args.External]; !exists {
 			logrus.Fatalf("unsupported external matching service: %s", args.External)
 		}
+	}
+	if args.OutputFormat != "postgres" && args.OutputFormat != "parquet" {
+		logrus.Fatalf("--output-format must be either `postgres` or `parquet`, got %s",
+			args.OutputFormat)
 	}
 	return args
 }

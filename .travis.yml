@@ -14,6 +14,9 @@ env:
 install:
   - make dependencies
 
+before_script:
+  - docker-compose up -d postgres
+
 script:
   - make test-coverage
   # make codecov
@@ -40,11 +43,13 @@ matrix:
         - pip --version
       install:
         - make install-dev-deps
+      before_script: skip
       script:
         - make check-style check-generate
     - stage: deploy
       go: 1.12.x
       install: skip
+      before_script: skip
       script:
         - make packages
       deploy:

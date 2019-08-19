@@ -1,0 +1,23 @@
+version: '3.2'
+services:
+  gitbase:
+    image: srcd/gitbase:v0.23.1
+    restart: unless-stopped
+    ports:
+      - 3306:3306
+    volumes:
+      - type: bind
+        source: ${GITBASE_VOLUME_SOURCE}
+        target: /opt/repos
+        read_only: true
+        consistency: delegated
+
+  postgres:
+    image: postgres:10-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_PASSWORD: superset
+      POSTGRES_USER: superset
+    ports:
+      - 5432:5432

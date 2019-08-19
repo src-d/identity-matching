@@ -2,14 +2,14 @@ package idmatch
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/src-d/eee-identity-matching/external"
 	"github.com/stretchr/testify/require"
 )
 
-//var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")
-var githubTestToken = "a7f979a7c45e7d3517ad7eeeb8cba5e16e813aef"
+var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")
 
 func TestReducePeople(t *testing.T) {
 	var people = People{
