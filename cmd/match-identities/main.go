@@ -145,7 +145,7 @@ func parseArgs() cliArgs {
 		"If a person has more than this number of unique names and unique emails summed, "+
 			"no more identities will be merged. If the identities are matched by an external API "+
 			"or by email this limitation can be violated.")
-	flag.StringVar(&args.OutputFormat, "output-format", "postgres",
+	flag.StringVar(&args.OutputFormat, "output-format", "parquet",
 		"Output format options are postgres or parquet.")
 	flag.StringVar(&args.PgHost, "pg-host", "0.0.0.0", "Postgres database host address.")
 	flag.StringVar(&args.PgPort, "pg-port", "5432", "Postgres database port.")
@@ -164,6 +164,9 @@ func parseArgs() cliArgs {
 	if args.OutputFormat != "postgres" && args.OutputFormat != "parquet" {
 		logrus.Fatalf("--output-format must be either `postgres` or `parquet`, got %s",
 			args.OutputFormat)
+	}
+	if args.OutputFormat == "postgres" && args.Output != "" {
+		logrus.Fatalf("--output must not be set if --output-format is postgres")
 	}
 	return args
 }
