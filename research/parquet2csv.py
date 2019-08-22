@@ -20,7 +20,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     input_path = Path(args.input)
-    output = args.output if args.output else input_path.with_suffix(".csv")
+    output = Path(args.output) if args.output else input_path.with_suffix(".csv")
     if not args.force and output.exists():
         print("File %s exists. Set -f flag to overwrite." % str(output))
         exit(1)

@@ -141,7 +141,8 @@ func TestFindPeople(t *testing.T) {
 	if err != nil {
 		return
 	}
-	people, err := FindPeople(context.TODO(), "0.0.0.0:3306", peopleFile.Name(), newTestBlacklist(t))
+	people, nameFreqs, err := FindPeople(
+		context.TODO(), "0.0.0.0:3306", peopleFile.Name(), newTestBlacklist(t))
 	if err != nil {
 		return
 	}
@@ -152,6 +153,7 @@ func TestFindPeople(t *testing.T) {
 		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(t, expected, people)
+	require.Equal(t, map[string]int{"alice": 1, "admin": 1, "bob": 4}, nameFreqs)
 }
 
 func TestReadPeopleFromDatabase(t *testing.T) {
@@ -256,4 +258,10 @@ func TestNormalizeSpaces(t *testing.T) {
 	require.Equal("1 2", normalizeSpaces("1 2"))
 	require.Equal("1 2", normalizeSpaces("1  \t  2 \n\n"))
 	require.Equal("12", normalizeSpaces("12"))
+}
+
+func TestGetNamesFreqs(t *testing.T) {
+	freqs, err := getNamesFreqs(rawPersons)
+	require.NoError(t, err)
+	require.Equal(t, map[string]int{"alice": 1, "admin": 1, "bob": 4}, freqs)
 }
