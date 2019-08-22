@@ -14,10 +14,6 @@ env:
 install:
   - make dependencies
 
-before_script:
-  - docker-compose up -d postgres
-  - sleep 5
-
 script:
   - make test-coverage
   # make codecov
@@ -42,7 +38,6 @@ matrix:
             - python3-pip
       install:
         - make install-dev-deps
-      before_script: skip
       script:
         - make check-style check-generate
     - stage: test
@@ -54,12 +49,14 @@ matrix:
             - libsnappy-dev
       install:
         - pip3 install -r ./parquet2sql/requirements.txt
+      before_script:
+        - docker-compose up -d postgres
+        - sleep 5
       script:
         - python3 -m unittest discover ./parquet2sql
     - stage: deploy
       go: 1.12.x
       install: skip
-      before_script: skip
       script:
         - make packages
       deploy:

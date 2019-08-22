@@ -2,8 +2,6 @@ package idmatch
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -229,60 +227,6 @@ func TestWriteAndReadParquetWithExternalID(t *testing.T) {
 	people, provider, err := readFromParquet(tmpfile.Name())
 	require.Equal(t, expectedPeople, people)
 	require.Equal(t, expectedIDProvider, provider)
-}
-
-func TestPostgresOutputFormat(t *testing.T) {
-	expectedPeople, err := newPeople(rawPersons, newTestBlacklist(t))
-	require.NoError(t, err)
-
-	expectedIDProvider := "test"
-	expectedPeople[1].ExternalID = "username1"
-	expectedPeople[2].ExternalID = "username2"
-
-	host, port, user, pass, dbname, table := "0.0.0.0", "5432", "superset", "superset", "superset", "test"
-	err = expectedPeople.WriteToPostgres(host, port, user, pass, dbname, table, expectedIDProvider)
-	require.NoError(t, err)
-
-	connStr := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
-		host, port, user, dbname)
-	if pass != "" {
-		connStr += fmt.Sprintf(" password='%s'", pass)
-	}
-	db, err := sql.Open("postgres", connStr)
-	require.NoError(t, err)
-	defer func() {
-		errClose := db.Close()
-		require.NoError(t, errClose)
-	}()
-
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s", table))
-	require.NoError(t, err)
-	cols, err := rows.Columns()
-	require.NoError(t, err)
-	require.Equal(t, cols, []string{
-		"id", "email", "name", "repo", "external_id_provider", "external_id"})
-	expectedRowsNumber := 8
-	rowsNumber := 0
-	var id int
-	var email, name, repo, externalIDProvider, externalID string
-	expectedIDs := []int{1, 1, 2, 2, 3, 3, 4, 4}
-	expectedEmails := []string{"bob@google.com", "", "bob@google.com", "", "alice@google.com", "", "bob@google.com", ""}
-	expectedNames := []string{"", "bob", "", "bob", "", "alice", "", "bob"}
-	expectedRepos := []string{"", "", "", "", "", "", "", ""}
-	expectedExternalIDProviders := []string{"test", "", "test", "", "", "", "", ""}
-	expectedExternalID := []string{"username1", "", "username2", "", "", "", "", ""}
-	for rows.Next() {
-		err = rows.Scan(&id, &email, &name, &repo, &externalIDProvider, &externalID)
-		require.NoError(t, err, rowsNumber)
-		require.Equal(t, expectedIDs[rowsNumber], id, rowsNumber)
-		require.Equal(t, expectedEmails[rowsNumber], email, rowsNumber)
-		require.Equal(t, expectedNames[rowsNumber], name, rowsNumber)
-		require.Equal(t, expectedRepos[rowsNumber], repo, rowsNumber)
-		require.Equal(t, expectedExternalIDProviders[rowsNumber], externalIDProvider, rowsNumber)
-		require.Equal(t, expectedExternalID[rowsNumber], externalID, rowsNumber)
-		rowsNumber++
-	}
-	require.Equal(t, expectedRowsNumber, rowsNumber)
 }
 
 func TestCleanName(t *testing.T) {
