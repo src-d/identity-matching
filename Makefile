@@ -33,7 +33,7 @@ check-style:
 	test -z "$$(gofmt -s -d .)"
 	test -z "$$(goimports -d .)"
 	go vet
-	pycodestyle --max-line-length=99 $(current_dir)/research
+	pycodestyle --max-line-length=99 $(current_dir)/research $(current_dir)/parquet2sql
 
 check-generate:
 	# -modtime flag is required to make `make check-generate` work.
