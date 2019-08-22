@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	_ "github.com/lib/pq" // postgres driver registration
 	"github.com/sirupsen/logrus"
 	"github.com/src-d/eee-identity-matching/reporter"
 	"github.com/xitongsys/parquet-go-source/local"
@@ -272,83 +271,6 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 	}
 }
 
-// WriteToPostgres saves people identities to a Postgres database
-func (p People) WriteToPostgres(host, port, user, pass, dbname, table,
-	externalIDProvider string) error {
-
-	connStr := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
-		host, port, user, dbname)
-	if pass != "" {
-		connStr += fmt.Sprintf(" password='%s'", pass)
-	}
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		errClose := db.Close()
-		if errClose != nil {
-			err = errClose
-		}
-	}()
-
-	rows, err := db.Query(fmt.Sprintf(existsTableSQL, table))
-	if err != nil {
-		return err
-	}
-	var exists bool
-	rows.Next()
-	err = rows.Scan(&exists)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return fmt.Errorf("table %s already exists in the database", table)
-	}
-	_, err = db.Exec(fmt.Sprintf(createTableSQL, table))
-	if err != nil {
-		return err
-	}
-
-	values := make([]string, 0, writeBatchSize)
-
-	commit := func() bool {
-		req := fmt.Sprintf(writeToTableSQL, table, strings.Join(values, ","))
-		values = values[:0]
-		if _, err = db.Exec(req); err != nil {
-			logrus.Errorf("Postgres write error for sql request %s", req)
-			return false
-		}
-		return true
-	}
-
-	provider := ""
-	p.ForEach(func(key int64, val *Person) bool {
-		for _, email := range val.Emails {
-			if val.ExternalID == "" {
-				provider = ""
-			} else {
-				provider = externalIDProvider
-			}
-			values = append(values, fmt.Sprintf(valuesTemplate,
-				val.ID, email, "", "", provider, val.ExternalID))
-		}
-		for _, name := range val.NamesWithRepos {
-			values = append(values, fmt.Sprintf(valuesTemplate,
-				val.ID, "", strings.Replace(name.Name, "'", "''", -1), name.Repo, "", ""))
-		}
-		if len(values) >= writeBatchSize {
-			return !commit()
-		}
-		return false
-	})
-	if ok := commit(); !ok {
-		return fmt.Errorf("postgres write error")
-	}
-
-	return err
-}
-
 // FindPeople returns all the people in the database or from the disk cache.
 func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (People, error) {
 	persons, err := findRawPersons(ctx, connString, cachePath)
@@ -362,27 +284,6 @@ func FindPeople(ctx context.Context, connString string, cachePath string, blackl
 	}
 	return people, nil
 }
-
-const existsTableSQL = `
-SELECT EXISTS (
-	SELECT 1
-	FROM   information_schema.tables 
-	WHERE  table_name = '%s'
-);
-`
-const createTableSQL = `
-CREATE TABLE %s (
-	id int NOT NULL,
-	email text NOT NULL,
-	name text NOT NULL,
-	repo text NOT NULL,
-	external_id_provider text NOT NULL,
-	external_id text NOT NULL
-);
-`
-const writeBatchSize = 2000
-const valuesTemplate = `(%d, '%s', '%s', '%s', '%s', '%s')`
-const writeToTableSQL = `INSERT INTO %s VALUES %s;`
 
 const findPeopleSQL = `
 SELECT DISTINCT repository_id, commit_author_name, commit_author_email
