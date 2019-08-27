@@ -14,7 +14,9 @@ Names can be with Surname or without, with typos, no name, etc.
 Thus to get precise information about developer it is required to gather their identities 
 and separate them from another person identities. That's what we call Identity Matching.
 
-![identity graph](docs/assets/idmatching_graph.png)
+<p align="center">
+  <img src="docs/assets/idmatching_graph.png" alt="Identity graph"/>
+</p>
 
 ## How To Use
 
@@ -25,9 +27,9 @@ Run `match-identities --help` to see all the parameters that you can configure.
 
 There are two use cases supported for `match-identities`.
 1. [With gitbase](#use-with-gitbase)
-1. [Without gitbase](#use-without-gitbase)
+2. [Without gitbase](#use-without-gitbase)
 
-In both cases, the output identity table can be either saved as a parquet file or directly to Postgres.
+In both cases, the output identity table is saved as a Parquet file.
 Read more in the [Output format](#output-format) section.
 
 ### Use with gitbase
@@ -66,11 +68,11 @@ match-identities \
 ```
 
 ### Output format 
-Once the algorithm finishes to merge idenitties, you get a table with 4 columns: 
+Once the algorithm finishes to merge identities, you get a table with 4 columns: 
 1. `id` (`int64`) -- unique identifier of the person with the corresponding identity. 
-1. `email` (`utf8`) -- e-mail of the identity.
-1. `name` (`utf8`) -- name of the identity.
-1. `repo` (`utf8`) -- repository of the commit.
+2. `email` (`utf8`) -- e-mail of the identity.
+3. `name` (`utf8`) -- name of the identity.
+4. `repo` (`utf8`) -- repository of the commit.
 
 
 The columns `email`, `name` and `repo` may contain empty values which means no constraints.
@@ -89,9 +91,9 @@ There are two developers.
 Let's name them Alice (with id 1) and Bob (with id 2). 
 When we analyze a commit with `alice@gmail.com` as author email, then the author is Alice.
 The repository and author name are ignored since the author email is the most reliable way to define an identity.
-On the other hand, when we analyze a commit with `alice` as  author name, then the author is Alice for whatever combination of email and repository.
+On the other hand, when we analyze a commit with `alice` as an author name, then the author is Alice for whatever combination of email and repository.
 Same for Bob, although he uses two different email addresses `bob@gmail.com` and `bob@inbox.com`.
-Finally, if we come across a commit with the `no-name` author name in `bob/bobs-project` repository then you know it is Bob's commit. 
+If we come across a commit with the `no-name` author name in `bob/bobs-project` repository then it is Bob's. 
 
 ### Convert parquet to CSV
 
@@ -122,18 +124,20 @@ There are two stages to match identities.
 The first is the precomputation which is run once on the whole dataset and remains unchanged during the subsequent steps. 
 The second is the matching itself.
 1. Precomputation:
-    1. Gather a list of the most popular names (by frequencies) on the whole dataset.
-    1. Gather 2 lists of emails and names that will be ignored (aka blacklists) on the whole dataset.
+    1. Gather 2 lists of the most popular names and emails (by frequencies) on the whole dataset.
+    2. Gather 2 lists of emails and names that will be ignored (aka blacklists) on the whole dataset.
        They are non-human identities and usually related to CI, bots, etc.
-1. Analysis:
+2. Analysis:
    1. Gather the list of triplets `{email, name, repository}` from all the commits using gitbase.
-   1. Remove any triplet whose name or email belongs to the blacklists. 
-   1. Merge identities with the same e-mail. 
-   1. Merge identities with the same name if it doesn't belong to the list of popular names created in 1.1.
+   2. Remove any triplet whose name or email belongs to the blacklists. 
+   3. Merge identities with the same e-mail if it doesn't belong to the list of popular emails created in 1.1.
+   4. Merge identities with the same name if it doesn't belong to the list of popular names created in 1.1.
       When the name belongs to this list we replace it with the following tuple `(name, repository)`. 
-   1. Save the resulting identity table in the desired output format.
+   5. Save the resulting identity table in the desired output format.
 
-![identity graph](docs/assets/idmatching.png)
+<p align="center">
+  <img src="docs/assets/idmatching.png" alt="Identity matching diagram"/>
+</p>
 
 There is a Design Document (or a Blueprint, or whatever else you are used to call project documentation) which goes into more detail:
 [link](https://docs.google.com/document/d/1oNo_rS5mHqEVk_yug8hbMWIpQaJeOUYZitR3jWnHJCs/edit#heading=h.qhzm4nnshexd).
