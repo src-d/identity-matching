@@ -16,8 +16,7 @@ install:
 
 script:
   - make test-coverage
-  # make codecov
-  # uncomment when source{d} has more private repository credits at codecov.io
+  - make codecov
 
 stages:
   - style

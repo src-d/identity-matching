@@ -1,19 +1,18 @@
-# Identity Matching Enterprise Edition Extension
+# Identity Matching source{d} Extension
 
-[![Travis build status](https://travis-ci.com/src-d/eee-identity-matching.svg?token=WzaxY77NzbmrefwxuhAh&branch=master)](https://travis-ci.com/src-d/eee-identity-matching)
+[![Travis build status](https://travis-ci.com/src-d/identity-matching.svg?token=WzaxY77NzbmrefwxuhAh&branch=master)](https://travis-ci.com/src-d/identity-matching) [![Code coverage](https://codecov.io/github/src-d/identity-matching/coverage.svg)](https://codecov.io/gh/src-d/identity-matching) [![Go Report Card](https://goreportcard.com/badge/github.com/src-d/identity-matching)](https://goreportcard.com/report/github.com/src-d/identity-matching) [![GPL 3.0 license](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
 
-Match different identities of the same person using 🤖.
+Match different identities of the same person using 🤖. Extension for [source{d}](https://github.com/src-d/sourced-ce).
 
-[Overview](#overview) • [How To Use](#how-to-use) • [Science](#science) • [Design Document](#design-document)
+[Overview](#overview) • [How To Use](#how-to-use) • [Science](#science) • [Contributions](#contributions) • [License](#license)
 
 ## Overview
 
 People are using different e-mails and names (aka identities) when they commit their work to git. 
 E-mails can be corporate, personal, special like users.noreply.github.com, etc. 
 Names can be with Surname or without, with typos, no name, etc. 
-Thus to get precise information about developer it is required to gather his/her identities 
-and separate them from another person identities. 
-This tool developed to solve exactly this problem that we called Identity Matching.
+Thus to get precise information about developer it is required to gather their identities 
+and separate them from another person identities. That's what we call Identity Matching.
 
 ## How To Use
 
@@ -116,8 +115,8 @@ it is possible to use their API to match identities by emails.
 ## How to build
 
 ```bash
-git clone https://github.com/src-d/eee-identity-matching
-cd eee-identity-matching
+git clone https://github.com/src-d/identity-matching
+cd identity-matching
 make build
 ```
 
@@ -144,8 +143,13 @@ The second is the matching itself.
       For popular names we use (name, repository) pairs. 
    1. Save the result to a parquet file.
 
+There is a Design Document (or a Blueprint, or whatever else you are used to call project documentation) which goes into more detail:
+[link](https://docs.google.com/document/d/1oNo_rS5mHqEVk_yug8hbMWIpQaJeOUYZitR3jWnHJCs/edit#heading=h.qhzm4nnshexd).
 
-## Design Document
+## Contributions
 
-Can be found in 
-[source{d} gdrive](https://docs.google.com/document/d/1oNo_rS5mHqEVk_yug8hbMWIpQaJeOUYZitR3jWnHJCs/edit#heading=h.qhzm4nnshexd).
+...are welcome! See [CONTRIBUTING](CONTRIBUTING.md) and [code of conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+GPL 3.0, see [LICENSE](LICENSE). Y u no Apache/MIT? [Read here.](https://github.com/src-d/guide/blob/master/engineering/licensing.md#licence)
