@@ -6,7 +6,7 @@ COMMANDS = cmd/match-identities
 PKG_OS = darwin linux
 
 DOCKERFILES = Dockerfile:$(PROJECT)
-DOCKER_ORG = "srcd"
+DOCKER_ORG = srcd
 
 # Including ci Makefile
 CI_REPOSITORY ?= https://github.com/src-d/ci.git
@@ -16,10 +16,12 @@ MAKEFILE := $(CI_PATH)/Makefile.main
 $(MAKEFILE):
 	git clone --quiet --depth 1 -b $(CI_BRANCH) $(CI_REPOSITORY) $(CI_PATH);
 -include $(MAKEFILE)
-
-export GITHUB_TEST_TOKEN=a7f979a7c45e7d3517ad7eeeb8cba5e16e813aef
-export GITLAB_TEST_TOKEN=RZtZsqZ3FckbHB-YRYzG
-export BITBUCKET_TEST_TOKEN=JOHRfFo9NG2npndvCXmkD82D
+ifdef TRAVIS_PULL_REQUEST
+ifneq ($(TRAVIS_PULL_REQUEST), false)
+GOTEST += -tags cipr
+$(info Pull Request test mode: $(GOTEST))
+endif
+endif
 
 fix-style:
 	gofmt -s -w .
