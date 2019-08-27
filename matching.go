@@ -51,9 +51,9 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 			username, _, err = matcher.MatchByEmail(ctx, email)
 			if err != nil {
 				if err == external.ErrNoMatches {
-					logrus.Warnf("no matches for person %s.", person.String())
+					logrus.Warnf("no matches for person %s", person.String())
 				} else {
-					logrus.Errorf("Unexpected error for person %s: %s", person.String(), err)
+					logrus.Errorf("unexpected error for person %s: %s", person.String(), err)
 				}
 				unprocessedEmails[email] = struct{}{}
 			} else {
@@ -219,7 +219,7 @@ func passIdentitiesLimit(graph *simple.UndirectedGraph, maxIdentities int, node1
 	n2Emails, n2Names := componentUniqueEmailsAndNames(graph, node2)
 	if n1Emails+n1Names >= maxIdentities || n2Names+n2Emails >= maxIdentities {
 		logrus.Debugf(
-			"Edge is not added between %s (%d emails, %d names) and %s (%d emails, %d names).",
+			"edge is not added between %s (%d emails, %d names) and %s (%d emails, %d names)",
 			node1.Value.String(), n1Emails, n1Names, node2.Value.String(), n2Emails, n2Names)
 		return false
 	}
@@ -295,7 +295,7 @@ func SetPrimaryName(people People, nameFreqs map[string]int) {
 					primaryName = name.Name
 				}
 			} else {
-				panic(fmt.Errorf("nameFreqs does not contain %s key", name.Name))
+				logrus.Panicf("nameFreqs does not contain %s key", name.Name)
 			}
 		}
 		p.PrimaryName = primaryName
