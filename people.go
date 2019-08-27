@@ -130,71 +130,70 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 	return result, nil
 }
 
-type parquetPerson struct {
+type parquetPersonAlias struct {
 	ID    int64  `parquet:"name=id, type=INT_64"`
 	Email string `parquet:"name=email, type=UTF8"`
 	Name  string `parquet:"name=name, type=UTF8"`
 	Repo  string `parquet:"name=repo, type=UTF8"`
 }
 
-type parquetPersonIDs struct {
+type parquetPersonIdentity struct {
 	ID                 int64  `parquet:"name=id, type=INT_64"`
 	PrimaryName        string `parquet:"name=primary_name, type=UTF8"`
 	ExternalIDProvider string `parquet:"name=external_id_provider, type=UTF8"`
 	ExternalID         string `parquet:"name=external_id, type=UTF8"`
 }
 
-func readFromParquet(path string) (People, string, error) {
-	path, pathIDs := preparePaths(path)
+func readFromParquet(pathAliases string) (People, string, error) {
+	pathAliases, pathIDs := preparePaths(pathAliases)
 	getParquetReader := func(path string, obj interface{}) (*reader.ParquetReader, func()) {
 		fr, err := local.NewLocalFileReader(path)
 		if err != nil {
-			logrus.Fatal("Read error", err)
+			logrus.Fatal("read error", err)
 		}
 		cleanup := func() {
 			err = fr.Close()
 			if err != nil {
-				logrus.Fatal("Failed to close the file.", err)
+				logrus.Fatal("failed to close the file", err)
 			}
 		}
 
 		pr, err := reader.NewParquetReader(fr, obj, int64(runtime.NumCPU()))
 		if err != nil {
-			logrus.Fatal("Read error", err)
+			logrus.Fatal("read error", err)
 		}
 		return pr, cleanup
 	}
 
-	pr, cleanup := getParquetReader(path, new(parquetPerson))
-	defer cleanup()
+	pr, cleanupAliases := getParquetReader(pathAliases, new(parquetPersonAlias))
+	defer cleanupAliases()
 	num := int(pr.GetNumRows())
-	parquetPersons := make([]parquetPerson, num)
-	if err := pr.Read(&parquetPersons); err != nil {
-		logrus.Println("Read error", err)
+	parquetPersonAliases := make([]parquetPersonAlias, num)
+	if err := pr.Read(&parquetPersonAliases); err != nil {
+		logrus.Printf("read error in %s: %v", pathAliases, err)
 		return nil, "", err
 	}
 	pr.ReadStop()
 
-	prIDs, cleanupIds := getParquetReader(pathIDs, new(parquetPersonIDs))
+	prIDs, cleanupIds := getParquetReader(pathIDs, new(parquetPersonIdentity))
 	defer cleanupIds()
 	numIds := int(prIDs.GetNumRows())
-	parquetPersonsIDs := make([]parquetPersonIDs, numIds)
+	parquetPersonsIDs := make([]parquetPersonIdentity, numIds)
 	if err := prIDs.Read(&parquetPersonsIDs); err != nil {
-		logrus.Println("Read error", err)
+		logrus.Printf("read error in %s: %v", pathIDs, err)
 		return nil, "", err
 	}
 	prIDs.ReadStop()
-	id2PersonIDs := map[int64]parquetPersonIDs{}
+	id2PersonID := map[int64]parquetPersonIdentity{}
 	for _, pp := range parquetPersonsIDs {
-		id2PersonIDs[pp.ID] = pp
+		id2PersonID[pp.ID] = pp
 	}
 
 	people := make(People)
 	var externalIDProvider, curExternalIDProvider string
-	for _, person := range parquetPersons {
+	for _, person := range parquetPersonAliases {
 		if _, ok := people[person.ID]; !ok {
-			people[person.ID] = &Person{
-				person.ID, nil, nil, "", ""}
+			people[person.ID] = &Person{person.ID, nil, nil, "", ""}
 		}
 		if person.Email != "" {
 			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
@@ -205,9 +204,9 @@ func readFromParquet(path string) (People, string, error) {
 		}
 	}
 	for _, p := range people {
-		people[p.ID].PrimaryName = id2PersonIDs[p.ID].PrimaryName
-		people[p.ID].ExternalID = id2PersonIDs[p.ID].ExternalID
-		curExternalIDProvider = id2PersonIDs[p.ID].ExternalIDProvider
+		people[p.ID].PrimaryName = id2PersonID[p.ID].PrimaryName
+		people[p.ID].ExternalID = id2PersonID[p.ID].ExternalID
+		curExternalIDProvider = id2PersonID[p.ID].ExternalIDProvider
 		if people[p.ID].ExternalID != "" {
 			if externalIDProvider != "" && externalIDProvider != curExternalIDProvider {
 				return people, externalIDProvider, fmt.Errorf(
@@ -226,17 +225,17 @@ func (p People) WriteToParquet(path string, externalIDProvider string) (err erro
 	getParquetWriter := func(path string, obj interface{}) (*writer.ParquetWriter, func()) {
 		pf, err := local.NewLocalFileWriter(path)
 		if err != nil {
-			logrus.Fatal("Failed to create new local file writer.", err)
+			logrus.Fatalf("failed to create a new local file writer at %s: %v", path, err)
 		}
 		pw, err := writer.NewParquetWriter(pf, obj, int64(runtime.NumCPU()))
 		if err != nil {
-			logrus.Fatal("Failed to create new parquet writer.", err)
+			logrus.Fatalf("failed to create a new parquet writer: %v", err)
 		}
 		pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
 		cleanup := func() {
 			err = pw.WriteStop()
 			if err != nil {
-				logrus.Fatal("Failed to stop write to parquet.", err)
+				logrus.Fatal("failed to stop write to parquet", err)
 			}
 			errClose := pf.Close()
 			if err == nil {
@@ -249,9 +248,9 @@ func (p People) WriteToParquet(path string, externalIDProvider string) (err erro
 		return pw, cleanup
 	}
 
-	pw, cleanup := getParquetWriter(path, new(parquetPerson))
+	pw, cleanup := getParquetWriter(path, new(parquetPersonAlias))
 	defer cleanup()
-	pwIDs, cleanupIDs := getParquetWriter(pathIDs, new(parquetPersonIDs))
+	pwIDs, cleanupIDs := getParquetWriter(pathIDs, new(parquetPersonIdentity))
 	defer cleanupIDs()
 
 	p.ForEach(func(key int64, val *Person) bool {
@@ -259,18 +258,18 @@ func (p People) WriteToParquet(path string, externalIDProvider string) (err erro
 		if val.ExternalID != "" {
 			provider = externalIDProvider
 		}
-		if err := pwIDs.Write(parquetPersonIDs{
+		if err := pwIDs.Write(parquetPersonIdentity{
 			val.ID, val.PrimaryName, provider, val.ExternalID}); err != nil {
 			return true
 		}
 		for _, email := range val.Emails {
-			if err := pw.Write(parquetPerson{
+			if err := pw.Write(parquetPersonAlias{
 				val.ID, email, "", ""}); err != nil {
 				return true
 			}
 		}
 		for _, name := range val.NamesWithRepos {
-			if err = pw.Write(parquetPerson{
+			if err = pw.Write(parquetPersonAlias{
 				val.ID, "", name.Name, name.Repo}); err != nil {
 				return true
 			}
@@ -280,12 +279,12 @@ func (p People) WriteToParquet(path string, externalIDProvider string) (err erro
 	return
 }
 
-func preparePaths(rawPath string) (path, pathIDs string) {
+func preparePaths(rawPath string) (pathAliases, pathIDs string) {
 	if strings.HasSuffix(rawPath, ".parquet") {
 		rawPath = rawPath[:len(rawPath)-len(".parquet")]
 	}
-	path = rawPath + ".parquet"
-	pathIDs = rawPath + "-IDs.parquet"
+	pathAliases = rawPath + "-aliases.parquet"
+	pathIDs = rawPath + "-identities.parquet"
 	return
 }
 
@@ -505,7 +504,7 @@ func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPers
 	}
 
 	if path != "" {
-		logrus.Printf("Caching the result to %s", path)
+		logrus.Printf("caching the result to %s", path)
 		if err := storePeopleOnDisk(path, result); err != nil {
 			return nil, err
 		}
