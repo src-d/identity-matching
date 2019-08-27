@@ -25,23 +25,23 @@ There are two use cases supported for `match-identities`.
 1. [With gitbase](#use-with-gitbase)
 1. [Without gitbase](#use-without-gitbase)
 
-In both cases, you get a parquet file as a result. 
-Read more in [Output format](#output-format) section.
+In both cases, the output identity table can be either saved as a parquet file or directly to Postgres.
+Read more in the [Output format](#output-format) section.
 
 ### Use with gitbase
 
-`match-identities` is designed to be used with [gitbase](https://github.com/src-d/gitbase). 
-First of all, make sure you have a gitbase instance running with all repositories you are going to analyze.
-Please refer to [gitbase](https://github.com/src-d/gitbase) documentation to get more information. 
+`match-identities` is supposed to be used with [gitbase](https://github.com/src-d/gitbase). 
+First of all, make sure you have a gitbase instance running with all the repositories you are going to analyze.
+Please refer to the [gitbase](https://github.com/src-d/gitbase) documentation to get more information. 
 
 Usage example:
 ```
 match-identities --output matched_identities.parquet
 ```
 
-You can also configure credentials with `--host`, `--port`, `--user` and `--password` flags. 
+The credentials can be configured with the `--host`, `--port`, `--user` and `--password` flags. 
 
-This command will query gitbase for commit identities with the following SQL: 
+For example, the following SQL gitbase query will return the identities of each commit author:
 ```sql
 SELECT DISTINCT repository_id, commit_author_name, commit_author_email
 FROM commits;
@@ -54,26 +54,25 @@ Read [Science](#Science) section to learn more.
 ### Use without gitbase
 If you run `match-identities` with the `--cache` option enabled you get a `csv` file with the cached [gitbase](https://github.com/src-d/gitbase) output.
 Besides, if you already have a list of identities it is possible to run `match-identities` without gitbase involved.
-Create a CSV file with columns `repo, email, name` and feed it to `--cache` parameter.
+Create a CSV file with the columns `repo`, `email` and `name`, then feed it to the `--cache` parameter.
 
-Example:
+Usage Example:
 ```
 match-identities \
     --cache path/to/csv/file.csv \
     --output matched_identities.parquet
 ```
-Note that you should replace `path/to/csv/file.csv` with a real path. 
 
 ### Output format 
-As a result, you get a parquet file with 4 columns: 
+Once the algorithm finishes to merge idenitties, you get a table with 4 columns: 
 1. `id` (`int64`) -- unique identifier of the person with the corresponding identity. 
 1. `email` (`utf8`) -- e-mail of the identity.
 1. `name` (`utf8`) -- name of the identity.
 1. `repo` (`utf8`) -- repository of the commit.
 
 
-Columns `email`, `name` and `repo` may contain empty values which mean no constraints.
-For example:
+The columns `email`, `name` and `repo` may contain empty values which means no constraints.
+For example, let's consider this output identity table:
 ```
 id,email,name,repo
 1,alice@gmail.com,"",""
@@ -84,33 +83,26 @@ id,email,name,repo
 2,"",no-name,bob/bobs-project
 ```
 
-The output means the following.
 There are two developers. 
-Let's name them Alice (id is 1) and Bob (id is 2). 
-If you see `alice@gmail.com` in commit author e-mail than the author is Alice.
-It does not matter which name was used or the repository name was.
-If you see `alice` in the commit author name then the author is Alice for any e-mail and repository.
-The same for Bob, though Bob uses two email addresses `bob@gmail.com` and `bob@inbox.com`.
-If you encounter a commit with the `no-name` author in `bob/bobs-project` repository then it is Bob's commit. 
+Let's name them Alice (with id 1) and Bob (with id 2). 
+When we analyze a commit with `alice@gmail.com` as author email, then the author is Alice.
+The repository and author name are ignored since the author email is the most reliable way to define an identity.
+On the other hand, when we analyze a commit with `alice` as  author name, then the author is Alice for whatever combination of email and repository.
+Same for Bob, although he uses two different email addresses `bob@gmail.com` and `bob@inbox.com`.
+Finally, if we come across a commit with the `no-name` author name in `bob/bobs-project` repository then you know it is Bob's commit. 
 
 ### Convert parquet to CSV
 
-If parquet is not convenient,
-you can convert it to CSV using the python script in `research` directory:
+It is possible to convert the output parquet file to CSV using the python script in the `research` directory:
 ```bash 
 python3 ./research/parquet2csv.py matched_identities.parquet
 ```
-The result will be saved in `matched_identities.csv` directory.
-Run `python3 ./research/parquet2csv.py` to see more options.
-
+The result will be saved as `matched_identities.csv`.
 Please note that pyspark must be installed. 
 
 ### External matching option
 
-If the organization is using GitHub, Gitlab or Bitbucket,
-it is possible to use their API to match identities by emails. 
-
-**TODO**
+If the organization is using GitHub, Gitlab or Bitbucket, it is possible to use their API to match identities by emails. In that case, 2 columns are added and filled for every email in the table: the `External id provider` and the `External id` itself.
 
 ## How to build
 
@@ -120,7 +112,7 @@ cd identity-matching
 make build
 ```
 
-You'll see two directories with Linux and Macos binaries inside `build` directory. 
+You'll see two directories with Linux and Macos binaries inside the `build` directory. 
 
 ## Science
 
