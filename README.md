@@ -14,6 +14,8 @@ Names can be with Surname or without, with typos, no name, etc.
 Thus to get precise information about developer it is required to gather their identities 
 and separate them from another person identities. That's what we call Identity Matching.
 
+![identity graph](docs/assets/idmatching_graph.png)
+
 ## How To Use
 
 **Right now no pre-built binaries are available.**
@@ -116,24 +118,22 @@ You'll see two directories with Linux and Macos binaries inside the `build` dire
 
 ## Science
 
-**TODO:** describe the approach.
-
 There are two stages to match identities. 
 The first is the precomputation which is run once on the whole dataset and remains unchanged during the subsequent steps. 
 The second is the matching itself.
 1. Precomputation:
-    1. Gather lists of the most popular e-mails and names (by frequencies) on the whole dataset.
-    1. Gather lists of emails and names that will be ignored (aka blacklists) on the whole dataset.
-       They are related to CI, bots, etc.
+    1. Gather a list of the most popular names (by frequencies) on the whole dataset.
+    1. Gather 2 lists of emails and names that will be ignored (aka blacklists) on the whole dataset.
+       They are non-human identities and usually related to CI, bots, etc.
 1. Analysis:
    1. Gather the list of triplets `{email, name, repository}` from all the commits using gitbase.
-   1. Filter the triplets by blacklists. 
-      If a name or an e-mail is in the blacklist then the triplet is deleted. 
-   1. Match identities by the same e-mail if this email is unpopular. 
-      Unpopular means there is no such email in the collected list of popular e-mails.
-   1. Match identities by the same name if it is unpopular. 
-      For popular names we use (name, repository) pairs. 
-   1. Save the result to a parquet file.
+   1. Remove any triplet whose name or email belongs to the blacklists. 
+   1. Merge identities with the same e-mail. 
+   1. Merge identities with the same name if it doesn't belong to the list of popular names created in 1.1.
+      When the name belongs to this list we replace it with the following tuple `(name, repository)`. 
+   1. Save the resulting identity table in the desired output format.
+
+![identity graph](docs/assets/idmatching.png)
 
 There is a Design Document (or a Blueprint, or whatever else you are used to call project documentation) which goes into more detail:
 [link](https://docs.google.com/document/d/1oNo_rS5mHqEVk_yug8hbMWIpQaJeOUYZitR3jWnHJCs/edit#heading=h.qhzm4nnshexd).
