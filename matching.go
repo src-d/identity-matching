@@ -282,3 +282,22 @@ func componentUniqueEmailsAndNames(graph *simple.UndirectedGraph, n simplegraph.
 	})
 	return len(emails), len(names)
 }
+
+// SetPrimaryName sets people primary name to the most frequent name of the person's identity
+func SetPrimaryName(people People, nameFreqs map[string]int) {
+	for _, p := range people {
+		maxFreq := 0
+		primaryName := ""
+		for _, name := range p.NamesWithRepos {
+			if freq, ok := nameFreqs[name.Name]; ok {
+				if freq > maxFreq {
+					maxFreq = freq
+					primaryName = name.Name
+				}
+			} else {
+				panic(fmt.Errorf("nameFreqs does not contain %s key", name.Name))
+			}
+		}
+		p.PrimaryName = primaryName
+	}
+}

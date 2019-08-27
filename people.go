@@ -41,6 +41,7 @@ type Person struct {
 	NamesWithRepos []NameWithRepo
 	Emails         []string
 	ExternalID     string
+	PrimaryName    string
 }
 
 func uniqueNamesWithRepo(names []NameWithRepo) []NameWithRepo {
@@ -130,42 +131,70 @@ func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
 }
 
 type parquetPerson struct {
+	ID    int64  `parquet:"name=id, type=INT_64"`
+	Email string `parquet:"name=email, type=UTF8"`
+	Name  string `parquet:"name=name, type=UTF8"`
+	Repo  string `parquet:"name=repo, type=UTF8"`
+}
+
+type parquetPersonIDs struct {
 	ID                 int64  `parquet:"name=id, type=INT_64"`
-	Email              string `parquet:"name=email, type=UTF8"`
-	Name               string `parquet:"name=name, type=UTF8"`
-	Repo               string `parquet:"name=repo, type=UTF8"`
+	PrimaryName        string `parquet:"name=primary_name, type=UTF8"`
 	ExternalIDProvider string `parquet:"name=external_id_provider, type=UTF8"`
 	ExternalID         string `parquet:"name=external_id, type=UTF8"`
 }
 
 func readFromParquet(path string) (People, string, error) {
-	fr, err := local.NewLocalFileReader(path)
-	if err != nil {
-		logrus.Fatal("Read error", err)
-	}
-	defer func() {
-		err = fr.Close()
+	path, pathIDs := preparePaths(path)
+	getParquetReader := func(path string, obj interface{}) (*reader.ParquetReader, func()) {
+		fr, err := local.NewLocalFileReader(path)
 		if err != nil {
-			logrus.Fatal("Failed to close the file.", err)
+			logrus.Fatal("Read error", err)
 		}
-	}()
+		cleanup := func() {
+			err = fr.Close()
+			if err != nil {
+				logrus.Fatal("Failed to close the file.", err)
+			}
+		}
 
-	pr, err := reader.NewParquetReader(fr, new(parquetPerson), int64(runtime.NumCPU()))
-	if err != nil {
-		logrus.Fatal("Read error", err)
+		pr, err := reader.NewParquetReader(fr, obj, int64(runtime.NumCPU()))
+		if err != nil {
+			logrus.Fatal("Read error", err)
+		}
+		return pr, cleanup
 	}
+
+	pr, cleanup := getParquetReader(path, new(parquetPerson))
+	defer cleanup()
 	num := int(pr.GetNumRows())
 	parquetPersons := make([]parquetPerson, num)
-	if err = pr.Read(&parquetPersons); err != nil {
+	if err := pr.Read(&parquetPersons); err != nil {
 		logrus.Println("Read error", err)
 		return nil, "", err
 	}
 	pr.ReadStop()
+
+	prIDs, cleanupIds := getParquetReader(pathIDs, new(parquetPersonIDs))
+	defer cleanupIds()
+	numIds := int(prIDs.GetNumRows())
+	parquetPersonsIDs := make([]parquetPersonIDs, numIds)
+	if err := prIDs.Read(&parquetPersonsIDs); err != nil {
+		logrus.Println("Read error", err)
+		return nil, "", err
+	}
+	prIDs.ReadStop()
+	id2PersonIDs := map[int64]parquetPersonIDs{}
+	for _, pp := range parquetPersonsIDs {
+		id2PersonIDs[pp.ID] = pp
+	}
+
 	people := make(People)
-	var externalIDProvider string
+	var externalIDProvider, curExternalIDProvider string
 	for _, person := range parquetPersons {
 		if _, ok := people[person.ID]; !ok {
-			people[person.ID] = &Person{person.ID, nil, nil, ""}
+			people[person.ID] = &Person{
+				person.ID, nil, nil, "", ""}
 		}
 		if person.Email != "" {
 			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
@@ -174,63 +203,89 @@ func readFromParquet(path string) (People, string, error) {
 			people[person.ID].NamesWithRepos = append(people[person.ID].NamesWithRepos,
 				NameWithRepo{person.Name, person.Repo})
 		}
-		if person.ExternalID != "" {
-			if externalIDProvider != "" && externalIDProvider != person.ExternalIDProvider {
+	}
+	for _, p := range people {
+		people[p.ID].PrimaryName = id2PersonIDs[p.ID].PrimaryName
+		people[p.ID].ExternalID = id2PersonIDs[p.ID].ExternalID
+		curExternalIDProvider = id2PersonIDs[p.ID].ExternalIDProvider
+		if people[p.ID].ExternalID != "" {
+			if externalIDProvider != "" && externalIDProvider != curExternalIDProvider {
 				return people, externalIDProvider, fmt.Errorf(
 					"there are multiple ExternalIDProvider-s for %s: %s %s",
-					people[person.ID].String(), externalIDProvider, person.ExternalIDProvider)
+					people[p.ID].String(), externalIDProvider, curExternalIDProvider)
 			}
-			if people[person.ID].ExternalID != "" && person.ExternalID != people[person.ID].ExternalID {
-				return people, externalIDProvider, fmt.Errorf(
-					"there are multiple usernames for %s: %s %s",
-					people[person.ID].String(), person.ExternalID, people[person.ID].ExternalID)
-			}
-			externalIDProvider = person.ExternalIDProvider
-			people[person.ID].ExternalID = person.ExternalID
+			externalIDProvider = curExternalIDProvider
 		}
 	}
-	return people, externalIDProvider, err
+	return people, externalIDProvider, nil
 }
 
 // WriteToParquet saves People structure to parquet file.
 func (p People) WriteToParquet(path string, externalIDProvider string) (err error) {
-	pf, err := local.NewLocalFileWriter(path)
-	defer func() {
-		errClose := pf.Close()
-		if err == nil {
-			err = errClose
-		}
+	path, pathIDs := preparePaths(path)
+	getParquetWriter := func(path string, obj interface{}) (*writer.ParquetWriter, func()) {
+		pf, err := local.NewLocalFileWriter(path)
 		if err != nil {
-			logrus.Errorf("failed to store the matches to %s: %v", path, err)
+			logrus.Fatal("Failed to create new local file writer.", err)
 		}
-	}()
-
-	pw, err := writer.NewParquetWriter(pf, new(parquetPerson), int64(runtime.NumCPU()))
-	if err != nil {
-		logrus.Fatal("Failed to create new parquet writer.", err)
-	}
-	provider := ""
-	pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
-	p.ForEach(func(key int64, val *Person) bool {
-		for _, email := range val.Emails {
-			if val.ExternalID == "" {
-				provider = ""
-			} else {
-				provider = externalIDProvider
+		pw, err := writer.NewParquetWriter(pf, obj, int64(runtime.NumCPU()))
+		if err != nil {
+			logrus.Fatal("Failed to create new parquet writer.", err)
+		}
+		pw.CompressionType = parquet.CompressionCodec_UNCOMPRESSED
+		cleanup := func() {
+			err = pw.WriteStop()
+			if err != nil {
+				logrus.Fatal("Failed to stop write to parquet.", err)
 			}
+			errClose := pf.Close()
+			if err == nil {
+				err = errClose
+			}
+			if err != nil {
+				logrus.Errorf("failed to store the matches to %s: %v", path, err)
+			}
+		}
+		return pw, cleanup
+	}
+
+	pw, cleanup := getParquetWriter(path, new(parquetPerson))
+	defer cleanup()
+	pwIDs, cleanupIDs := getParquetWriter(pathIDs, new(parquetPersonIDs))
+	defer cleanupIDs()
+
+	p.ForEach(func(key int64, val *Person) bool {
+		provider := ""
+		if val.ExternalID != "" {
+			provider = externalIDProvider
+		}
+		if err := pwIDs.Write(parquetPersonIDs{
+			val.ID, val.PrimaryName, provider, val.ExternalID}); err != nil {
+			return true
+		}
+		for _, email := range val.Emails {
 			if err := pw.Write(parquetPerson{
-				val.ID, email, "", "", provider, val.ExternalID}); err != nil {
+				val.ID, email, "", ""}); err != nil {
 				return true
 			}
 		}
 		for _, name := range val.NamesWithRepos {
-			if err = pw.Write(parquetPerson{val.ID, "", name.Name, name.Repo, "", ""}); err != nil {
+			if err = pw.Write(parquetPerson{
+				val.ID, "", name.Name, name.Repo}); err != nil {
 				return true
 			}
 		}
 		return false
 	})
-	err = pw.WriteStop()
+	return
+}
+
+func preparePaths(rawPath string) (path, pathIDs string) {
+	if strings.HasSuffix(rawPath, ".parquet") {
+		rawPath = rawPath[:len(rawPath)-len(".parquet")]
+	}
+	path = rawPath + ".parquet"
+	pathIDs = rawPath + "-IDs.parquet"
 	return
 }
 
@@ -272,21 +327,40 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 }
 
 // FindPeople returns all the people in the database or from the disk cache.
-func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (People, error) {
+func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (
+	People, map[string]int, error) {
 	persons, err := findRawPersons(ctx, connString, cachePath)
 	reporter.Commit("people found", len(persons))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	people, err := newPeople(persons, blacklist)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return people, nil
+	nameFreqs, err := getNamesFreqs(persons)
+	if err != nil {
+		return people, nil, err
+	}
+
+	return people, nameFreqs, nil
+}
+
+// getNamesFreqs calculates frequencies of rawPerson names
+func getNamesFreqs(persons []rawPerson) (map[string]int, error) {
+	freqs := map[string]int{}
+	for _, p := range persons {
+		name, err := cleanName(p.name)
+		if err != nil {
+			return nil, err
+		}
+		freqs[name]++
+	}
+	return freqs, nil
 }
 
 const findPeopleSQL = `
-SELECT DISTINCT repository_id, commit_author_name, commit_author_email
+SELECT repository_id, commit_author_name, commit_author_email
 FROM commits;
 `
 
