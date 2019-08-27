@@ -2,6 +2,7 @@ package idmatch
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -76,9 +77,14 @@ func TestReducePeopleMaxIdentities(t *testing.T) {
 	require.Equal(t, reducedPeople, people)
 }
 
+func printTestSkippedNoToken() {
+	fmt.Println("GITHUB_TEST_TOKEN environment variable is not set, skipping the test")
+}
+
 func TestReducePeopleExternalMatching(t *testing.T) {
 	if githubTestToken == "" {
-		panic("GITHUB_TEST_TOKEN environment variable is not set")
+		printTestSkippedNoToken()
+		return
 	}
 	var people = People{
 		1: {ID: 1,
@@ -115,7 +121,8 @@ func TestReducePeopleExternalMatching(t *testing.T) {
 
 func TestReducePeopleBothMatching(t *testing.T) {
 	if githubTestToken == "" {
-		panic("GITHUB_TEST_TOKEN environment variable is not set")
+		printTestSkippedNoToken()
+		return
 	}
 	var people = People{
 		1: {ID: 1,
@@ -178,9 +185,9 @@ func TestReducePeopleBothMatching(t *testing.T) {
 }
 
 func TestReducePeopleBothMatchingDifferentExternalIdsNoMerge(t *testing.T) {
-	githubTestToken := "a7f979a7c45e7d3517ad7eeeb8cba5e16e813aef"
 	if githubTestToken == "" {
-		panic("GITHUB_TEST_TOKEN environment variable is not set")
+		printTestSkippedNoToken()
+		return
 	}
 	var people = People{
 		1: {ID: 1,

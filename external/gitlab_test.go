@@ -1,3 +1,5 @@
+// +build !cipr
+
 package external
 
 import (
