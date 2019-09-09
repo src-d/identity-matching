@@ -77,6 +77,12 @@ func (m CachedMatcher) DumpCache() error {
 	return m.cache.DumpCache()
 }
 
+//FIXME
+func (m CachedMatcher) ScanCommit(ctx context.Context, repo, email, commit string) error {
+	cs := m.matcher.(CommitScanner)
+	return cs.ScanCommit(ctx, repo, email, commit)
+}
+
 // MatchByEmail returns the latest GitHub user with the given email.
 // If email was fetched already it uses cached value.
 // MatchByEmail runs `matcher.MatchByEmail` if not.

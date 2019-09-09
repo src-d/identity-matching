@@ -1,7 +1,7 @@
 version: '3.2'
 services:
   gitbase:
-    image: srcd/gitbase:v0.23.1
+    image: srcd/gitbase:v0.24.0-beta3
     restart: unless-stopped
     ports:
       - 3306:3306

@@ -15,6 +15,7 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/sirupsen/logrus"
+	"github.com/src-d/eee-identity-matching/external"
 	"github.com/src-d/eee-identity-matching/reporter"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/parquet"
@@ -326,9 +327,9 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 }
 
 // FindPeople returns all the people in the database or from the disk cache.
-func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (
+func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist, extmatcher external.Matcher) (
 	People, map[string]int, error) {
-	persons, err := findRawPersons(ctx, connString, cachePath)
+	persons, err := findRawPersons(ctx, connString, cachePath, extmatcher)
 	reporter.Commit("people found", len(persons))
 	if err != nil {
 		return nil, nil, err
@@ -358,10 +359,9 @@ func getNamesFreqs(persons []rawPerson) (map[string]int, error) {
 	return freqs, nil
 }
 
-const findPeopleSQL = `
-SELECT repository_id, commit_author_name, commit_author_email
-FROM commits;
-`
+const findPeopleSQL = `SELECT c.repository_id, c.commit_author_name, c.commit_author_email, FIRST(c.commit_hash) AS commit_hash
+FROM commits c
+GROUP BY 1, 2, 3;`
 
 func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 	var file *os.File
@@ -428,7 +428,7 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 	return
 }
 
-func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, error) {
+func readRawPersonsFromDatabase(ctx context.Context, conn string, extmatcher external.Matcher) ([]rawPerson, error) {
 	db, err := sql.Open("mysql", conn)
 	if err != nil {
 		return nil, err
@@ -447,11 +447,21 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 	for rows.Next() {
 		spin.Suffix = fmt.Sprintf(" %d", i+1)
 		i++
-		var repo, name, email string
-		if err := rows.Scan(&repo, &name, &email); err != nil {
+		var p rawPerson
+		var commitHash string
+		if err := rows.Scan(&p.repo, &p.name, &p.email, &commitHash); err != nil {
 			return nil, err
 		}
-		result = append(result, rawPerson{repo, name, email})
+
+		if cs, ok := extmatcher.(external.CommitScanner); ok {
+			if err := cs.ScanCommit(ctx, p.repo, p.email, commitHash); err != nil {
+				logrus.Errorf("error scanning commit", err)
+			}
+		} else {
+			logrus.Fatalf("no commitscanner") //FIXME: remove
+		}
+
+		result = append(result, p)
 	}
 
 	return result, rows.Err()
@@ -490,7 +500,7 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 	return
 }
 
-func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPerson, error) {
+func findRawPersons(ctx context.Context, connStr string, path string, extmatcher external.Matcher) ([]rawPerson, error) {
 	if _, err := os.Stat(path); err == nil {
 		return readRawPersonsFromDisk(path)
 	} else if !os.IsNotExist(err) {
@@ -498,7 +508,7 @@ func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPers
 	}
 
 	logrus.Printf("not cached in %s, loading from the database", path)
-	result, err := readRawPersonsFromDatabase(ctx, connStr)
+	result, err := readRawPersonsFromDatabase(ctx, connStr, extmatcher)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,12 @@ type Matcher interface {
 	MatchByEmail(ctx context.Context, email string) (user, name string, err error)
 }
 
+// CommitScanner defines an external matching service that can scan commit
+// hashes before matching emails.
+type CommitScanner interface {
+	ScanCommit(ctx context.Context, repo, email, commit string) error
+}
+
 // MatcherConstructor is the Matcher constructor function type.
 type MatcherConstructor func(apiURL, token string) (Matcher, error)
 

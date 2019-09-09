@@ -3,18 +3,21 @@ package external
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
-	"gopkg.in/google/go-github.v15/github"
+	"github.com/google/go-github/v28/github"
 )
 
 // GitHubMatcher matches emails and GitHub users.
 type GitHubMatcher struct {
 	client *github.Client
+	emailToUserCache map[string]string
+	userToNameCache map[string]string
 }
 
 // NewGitHubMatcher creates a new matcher given a GitHub token.
@@ -35,7 +38,11 @@ func NewGitHubMatcher(apiURL, token string) (Matcher, error) {
 	if err != nil {
 		return GitHubMatcher{}, err
 	}
-	return GitHubMatcher{client}, nil
+	return GitHubMatcher{
+		client: client,
+		emailToUserCache: make(map[string]string),
+		userToNameCache: make(map[string]string),
+	}, nil
 }
 
 var searchOpts = &github.SearchOptions{
@@ -43,13 +50,24 @@ var searchOpts = &github.SearchOptions{
 	ListOptions: github.ListOptions{PerPage: 1},
 }
 
-// MatchByEmail returns the latest GitHub user with the given email.
-func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
-	finished := make(chan struct{})
-	go func() {
-		defer func() { finished <- struct{}{} }()
+// CommitScan
+func (m GitHubMatcher) ScanCommit(ctx context.Context, repo, email, commit string) error {
+	logrus.Infof("scanning commit %s %s", repo, commit)
+	p := regexp.MustCompile(`.*github.com/([^/]+)/([^/]+?)(?:\.git)?$`) //TODO: initialize statically
+	match := p.FindStringSubmatch(repo)
+	if len(match) == 0 {
+		logrus.Infof("no github", repo, commit)
+		return nil
+	}
 
-		var numFailures uint64
+	// do not check more than 1 commit per author/committer email
+	if _, ok := m.emailToUserCache[email]; ok {
+		logrus.Infof("email %s already checked", email)
+		return nil
+	}
+
+	//TODO: refactor out, repeated in MatchByEmail
+	var numFailures uint64
 		const maxNumFailures = 8
 		const (
 			success = 0
@@ -72,7 +90,7 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 					response.Response.Header["X-Ratelimit-Reset"][0], 10, 64)
 				if err != nil {
 					logrus.Errorf("Bad X-Ratelimit-Reset header: %v. %s",
-						err, response.String())
+						err)
 					return fail
 				}
 				resetTime := time.Unix(t, 0).Add(time.Second)
@@ -83,7 +101,7 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 
 			if err != nil || code >= 500 && code < 600 || code == 408 || code == 429 {
 				sleepTime := time.Duration((1 << numFailures) * int64(time.Second))
-				logrus.Warnf("HTTP %d: %s. %s. Sleeping until %s", code, err, response.String(),
+				logrus.Warnf("HTTP %d: %s. Sleeping until %s", code, err,
 					time.Now().UTC().Add(sleepTime))
 				time.Sleep(sleepTime)
 				numFailures++
@@ -92,59 +110,123 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 				}
 				return retry
 			}
-			logrus.Warnf("HTTP %d: %s. %s", code, err, response.String())
+			logrus.Warnf("HTTP %d: %s", code, err)
 			return fail
 		}
 
-		query := email + " in:email"
-		for { // api rate limit retry loop
-			if isNoReplyEmail(email) {
-				user = userFromEmail(email)
+	for {
+		c, resp, err := m.client.Repositories.GetCommit(ctx, match[1], match[2], commit)
+		status := check(resp, err)
+		if status == retry {
+	      continue
+		} else if status == fail {
+			return err
+		}
+
+		//TODO: c.Author and c.Committer are the same type, refactor when
+		//      committer support is added.
+		if c.Author != nil {
+			if c.Author.Login != nil {
+				logrus.Infof("found login: %s -> %s", email, *c.Author.Login)
+				m.emailToUserCache[email] = *c.Author.Login
 			} else {
-				var result *github.UsersSearchResult
-				var response *github.Response
-				result, response, err = m.client.Search.Users(ctx, query, searchOpts)
-				status := check(response, err)
-				if status == retry {
-					continue
-				} else if status == fail {
-					return
-				}
-				if len(result.Users) == 0 {
-					if strings.Contains(query, "@") {
-						// Hacking time! user+domain may work instead of user@domain
-						query = strings.Replace(query, "@", " ", 1)
-						continue
-					}
-					logrus.Warnf("unable to find users for email: %s", email)
-					err = ErrNoMatches
-					return
-				}
-				user = result.Users[0].GetLogin()
-				break
+				logrus.Infof("login not found: %s", email)
+				m.emailToUserCache[email] = ""
 			}
 		}
 
-		for { // api rate limit retry loop
-			var u *github.User
-			var response *github.Response
-			u, response, err = m.client.Users.Get(ctx, user)
-			status := check(response, err)
-			if status == retry {
-				continue
-			} else if status == fail {
+		break
+	}
+
+	return nil
+}
+
+// MatchByEmail returns the latest GitHub user with the given email.
+func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+	var numFailures uint64
+	const maxNumFailures = 8
+	const (
+		success = 0
+		retry   = 1
+		fail    = 2
+	)
+	check := func(response *github.Response, err error) int {
+		code := response.Response.StatusCode
+		if err == nil && code >= 200 && code < 300 {
+			return success
+		}
+
+		rateLimitHit := false
+		if val, exists := response.Response.Header["X-Ratelimit-Remaining"]; code == 403 &&
+			exists && len(val) == 1 && val[0] == "0" {
+			rateLimitHit = true
+		}
+		if rateLimitHit {
+			t, err := strconv.ParseInt(
+				response.Response.Header["X-Ratelimit-Reset"][0], 10, 64)
+			if err != nil {
+				logrus.Errorf("Bad X-Ratelimit-Reset header: %v",
+					err)
+				return fail
+			}
+			resetTime := time.Unix(t, 0).Add(time.Second)
+			logrus.Warnf("rate limit was hit, waiting until %s", resetTime.String())
+			time.Sleep(resetTime.Sub(time.Now().UTC()))
+			return retry
+		}
+
+		if err != nil || code >= 500 && code < 600 || code == 408 || code == 429 {
+			sleepTime := time.Duration((1 << numFailures) * int64(time.Second))
+			logrus.Warnf("HTTP %d: %s. Sleeping until %s", code, err,
+				time.Now().UTC().Add(sleepTime))
+			time.Sleep(sleepTime)
+			numFailures++
+			if numFailures > maxNumFailures {
+				return fail
+			}
+			return retry
+		}
+		logrus.Warnf("HTTP %d: %s", code, err)
+		return fail
+	}
+
+	if isNoReplyEmail(email) {
+		user = userFromEmail(email)
+	} else {
+		u, ok := m.emailToUserCache[email]
+		if ok {
+			if u == "" {
+				logrus.Infof("MatchByEmail commit scan cache empty of %s", email)
 				return
 			}
-			user = u.GetLogin()
-			name = u.GetName()
+
+			logrus.Infof("MatchByEmail succeeded with commit scan cache %s", email)
+			user = u
+		} else {
+			logrus.Infof("MatchByEmail no cache %s", email)
 			return
 		}
-	}()
-	select {
-	case <-finished:
+	}
+
+	if n, ok := m.userToNameCache[user]; ok {
+		name = n
 		return
-	case <-ctx.Done():
-		return "", "", context.Canceled
+	}
+
+	for { // api rate limit retry loop
+		var u *github.User
+		var response *github.Response
+		u, response, err = m.client.Users.Get(ctx, user)
+		status := check(response, err)
+		if status == retry {
+			continue
+		} else if status == fail {
+			return
+		}
+		user = u.GetLogin()
+		name = u.GetName()
+		m.userToNameCache[user] = name
+		return
 	}
 }
 

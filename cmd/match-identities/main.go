@@ -66,7 +66,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("unable to load the blacklist: %v", err)
 	}
-	people, nameFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist)
+	people, nameFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist, extmatcher)
 	if err != nil {
 		logrus.Fatalf("unable to find people: %v", err)
 	}

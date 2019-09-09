@@ -3,6 +3,8 @@ package reporter
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 var report = map[string]interface{}{}
@@ -32,6 +34,7 @@ func Increment(key string) int {
 
 // Write function prints report to stdout and clear all values
 func Write() {
+	spew.Dump(report) //XXX: debug
 	if jsonString, err := json.Marshal(report); err == nil {
 		fmt.Println(string(jsonString))
 	} else {

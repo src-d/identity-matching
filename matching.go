@@ -3,6 +3,7 @@ package idmatch
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/sirupsen/logrus"
@@ -206,6 +207,10 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 		}
 	}
 	mean, std := stat.MeanStdDev(componentsSize, nil)
+	// If std is NaN, serialization to JSON will fail
+	if math.IsNaN(std) {
+		std = 0
+	}
 	reporter.Commit("connected component size mean", mean)
 	reporter.Commit("connected component size std", std)
 	reporter.Commit("connected component size max", floats.Max(componentsSize))
