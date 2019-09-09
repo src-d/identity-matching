@@ -16,12 +16,12 @@ class TestParquet2SQL(unittest.TestCase):
 
             class args:
                 parquet = f.name
-                database = "postgresql://superset:superset@localhost:5432/superset"
+                db = "postgresql://superset:superset@localhost:5432/superset"
                 table = "parquet2db_test"
 
             parquet2sql.parquet2sql(args)
 
-        df2 = pd.read_sql_table(args.table, args.database)
+        df2 = pd.read_sql_table(args.table, args.db)
         del df2["index"]
         self.assertTrue(all(df2 == df))
 
