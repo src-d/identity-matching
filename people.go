@@ -359,7 +359,7 @@ func getNamesFreqs(persons []rawPerson) (map[string]int, error) {
 	return freqs, nil
 }
 
-const findPeopleSQL = `SELECT c.repository_id, c.commit_author_name, c.commit_author_email, FIRST(c.commit_hash) AS commit_hash
+const findPeopleSQL = `SELECT c.repository_id, c.commit_author_name, c.commit_author_email, MAX(c.commit_hash) AS commit_hash
 FROM commits c
 GROUP BY 1, 2, 3;`
 
