@@ -23,9 +23,9 @@ def get_parser():
 def parquet2sql(args):
     log = logging.getLogger("parquet2sql")
     df = pd.read_parquet(args.parquet)
-    engine = create_engine(args.database)
+    engine = create_engine(args.db)
     df.to_sql(args.table, engine)
-    log.info("File %s saved to table %s at %s" % (args.parquet, args.table, args.database))
+    log.info("File %s saved to table %s at %s" % (args.parquet, args.table, args.db))
     return 0
 
 
