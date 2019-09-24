@@ -6,6 +6,9 @@ go:
   - 1.11.x
   - 1.12.x
 
+services:
+  - docker
+
 env:
   global:
     - GO111MODULE=on
@@ -21,6 +24,7 @@ script:
 stages:
   - style
   - test
+  - docker-test
   - name: deploy
     # require any tag name
     if: tag =~ .*
@@ -53,6 +57,11 @@ matrix:
         - sleep 5
       script:
         - python3 -m unittest discover ./parquet2sql
+    - stage: docker-test
+      go: 1.12.x
+      install: skip
+      script:
+        - make docker-test
     - stage: deploy
       go: 1.12.x
       install: skip

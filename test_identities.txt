@@ -1,0 +1,6 @@
+ index | id | primary_name | external_id_provider | external_id 
+-------+----+--------------+----------------------+-------------
+     0 |  1 | bob          |                      | 
+     1 |  3 | alice        |                      | 
+(2 rows)
+
