@@ -6,14 +6,15 @@ import (
 	"sort"
 
 	"github.com/sirupsen/logrus"
-	"github.com/src-d/eee-identity-matching/external"
-	"github.com/src-d/eee-identity-matching/reporter"
 	"gonum.org/v1/gonum/floats"
 	simplegraph "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/simple"
 	"gonum.org/v1/gonum/graph/topo"
 	"gonum.org/v1/gonum/graph/traverse"
 	"gonum.org/v1/gonum/stat"
+
+	"github.com/src-d/identity-matching/external"
+	"github.com/src-d/identity-matching/reporter"
 )
 
 type node struct {

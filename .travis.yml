@@ -1,10 +1,10 @@
-dist: xenial
+dist: bionic
 
 language: go
 
 go:
-  - 1.11.x
   - 1.12.x
+  - 1.13.x
 
 services:
   - docker
@@ -12,10 +12,9 @@ services:
 env:
   global:
     - GO111MODULE=on
-    - GOFLAGS="-mod=readonly"
 
 install:
-  - make dependencies
+  - travis_retry make dependencies
 
 script:
   - make test-coverage
@@ -33,7 +32,7 @@ matrix:
   fast_finish: true
   include:
     - stage: style
-      go: 1.12.x
+      go: 1.13.x
       addons:
         apt:
           packages:
@@ -53,17 +52,19 @@ matrix:
       install:
         - pip3 install -r ./parquet2sql/requirements.txt
       before_script:
-        - docker-compose up -d postgres
+        - docker run -d --name postgres --network=host -e POSTGRES_DB=superset -e POSTGRES_USER=superset -e POSTGRES_PASSWORD=superset postgres:10-alpine 
         - sleep 5
       script:
         - python3 -m unittest discover ./parquet2sql
+      after_script:
+        - docker rm -f postgres
     - stage: docker-test
-      go: 1.12.x
+      go: 1.13.x
       install: skip
       script:
         - make docker-test
     - stage: deploy
-      go: 1.12.x
+      go: 1.13.x
       install: skip
       script:
         - make packages

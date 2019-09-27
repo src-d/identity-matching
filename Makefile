@@ -53,34 +53,29 @@ docker-build:
 	docker build -t identity-matching .
 
 docker-test: docker-build
-	docker-compose up -d postgres
-	docker run --name mysql -e MYSQL_ALLOW_EMPTY_PASSWORD=1 -p 3305:3306 --ip 0.0.0.0 -d mysql
-	sleep 5
-	docker exec -i mysql mysql -u root --password='' -h 0.0.0.0 < ./test_commits.sql
-	docker run --network=host \
+	docker-compose up -d
+	while ! docker exec im_gitbase sh -c 'mysql -u root --password="" < /tests/test_commits.sql'; do sleep 1; done
+	while ! docker exec -it im_postgres psql -U superset -c "\dt"; do sleep 1; done
+	(sleep 120 && killall make) &
+	while ! docker run --network identity-matching_default \
     -e IDENTITY_MATCHING_OUTPUT="identities" \
-    -e IDENTITY_MATCHING_GITBASE_HOST="0.0.0.0" \
-    -e IDENTITY_MATCHING_GITBASE_PORT="3305" \
+    -e IDENTITY_MATCHING_GITBASE_HOST="im_gitbase" \
+    -e IDENTITY_MATCHING_GITBASE_PORT="3306" \
     -e IDENTITY_MATCHING_GITBASE_USER="root" \
     -e IDENTITY_MATCHING_GITBASE_PASSWORD="" \
     -e IDENTITY_MATCHING_POSTGRES_DB="superset"\
     -e IDENTITY_MATCHING_POSTGRES_USER="superset" \
     -e IDENTITY_MATCHING_POSTGRES_PASSWORD="superset" \
-    -e IDENTITY_MATCHING_POSTGRES_HOST="0.0.0.0" \
+    -e IDENTITY_MATCHING_POSTGRES_HOST="im_postgres" \
     -e IDENTITY_MATCHING_POSTGRES_PORT="5432" \
     -e IDENTITY_MATCHING_POSTGRES_ALIASES_TABLE="aliases" \
     -e IDENTITY_MATCHING_POSTGRES_IDENTITIES_TABLE="identities" \
     -e IDENTITY_MATCHING_MAX_IDENTITIES="20" \
-	identity-matching ./identities2sql.sh
-	docker exec -it identity-matching_postgres_1 psql -U superset -c "SELECT * FROM identities ORDER BY id" \
-	> identities.txt
-	docker exec -it identity-matching_postgres_1 psql -U superset -c "SELECT * FROM aliases ORDER BY \
-	id, name, repo" > aliases.txt
-	if cmp -s identities.txt test_identities.txt; then
-	    printf 'Result test identities are wrong'
-	    exit 1
-	if cmp -s aliases.txt test_aliases.txt; then
-	    printf 'Result test aliases are wrong'
-	    exit 1
+	identity-matching; do sleep 1; done
+	docker exec -it im_postgres psql -U superset -c "SELECT * FROM identities ORDER BY id" > identities.txt
+	docker exec -it im_postgres psql -U superset -c "SELECT * FROM aliases ORDER BY id, name, repo" > aliases.txt
+	diff identities.txt tests/test_identities.txt && rm identities.txt
+	diff aliases.txt tests/test_aliases.txt && rm aliases.txt
+	docker-compose down
 
 .PHONY: check-style check-generate install-dev-deps fix-style docker-build docker-compose-build

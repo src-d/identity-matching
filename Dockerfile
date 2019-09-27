@@ -1,18 +1,29 @@
-FROM golang:1.12 AS builder
+FROM golang:1.13 AS builder
 
-COPY . src/identity-matching
-RUN cd src/identity-matching && GO111MODULE=on make build
+COPY *.go go.mod go.sum src/
+COPY blacklists src/blacklists
+COPY cmd src/cmd
+COPY external src/external
+COPY reporter src/reporter
+RUN cd src && GOBIN=$(realpath ..) GO111MODULE=on go install github.com/src-d/identity-matching/cmd/match-identities
 
-FROM python:3.7
+FROM ubuntu:18.04
 
-WORKDIR /home/identity-matching
-RUN apt-get update && apt-get install -y libsnappy-dev
-COPY --from=builder /go/src/identity-matching/build/bin/match-identities \
-        /usr/local/bin/match-identities
-COPY . identity-matching/
-RUN cd identity-matching/parquet2sql && pip install -r requirements.txt
+COPY --from=builder /go/match-identities /usr/local/bin
 
-COPY identities2sql.sh identities2sql.sh
+COPY parquet2sql/requirements.txt .
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-suggests --no-install-recommends ca-certificates libsnappy1v5 libsnappy-dev python3 python3-distutils python3-dev gcc g++ wget && \
+    wget -O - https://bootstrap.pypa.io/get-pip.py | python3 && \
+    pip3 install -r requirements.txt && \
+    rm requirements.txt && \
+    apt-get remove -y libsnappy-dev wget python3-dev gcc g++ && \
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN chmod +x identities2sql.sh
-CMD ["./identities2sql.sh"]
+COPY parquet2sql/parquet2sql.py /usr/local/bin
+COPY identities2sql.sh /usr/local/bin
+
+CMD ["identities2sql.sh"]

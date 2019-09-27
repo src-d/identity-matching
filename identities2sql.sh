@@ -1,5 +1,4 @@
-#!/bin/bash
-set -e
+#!/bin/sh -ex
 
 match-identities \
     --output "${IDENTITY_MATCHING_OUTPUT}" \
@@ -12,12 +11,12 @@ match-identities \
     --token "${IDENTITY_MATCHING_TOKEN}" \
     --max-identities "${IDENTITY_MATCHING_MAX_IDENTITIES}" \
 
-python identity-matching/parquet2sql/parquet2sql.py \
+parquet2sql.py \
        --db "postgresql://${IDENTITY_MATCHING_POSTGRES_USER}:${IDENTITY_MATCHING_POSTGRES_PASSWORD}@${IDENTITY_MATCHING_POSTGRES_HOST}:${IDENTITY_MATCHING_POSTGRES_PORT}/${IDENTITY_MATCHING_POSTGRES_DB}" \
        --parquet "${IDENTITY_MATCHING_OUTPUT}-identities.parquet" \
        --table "${IDENTITY_MATCHING_POSTGRES_IDENTITIES_TABLE}"
 
-python identity-matching/parquet2sql/parquet2sql.py \
+parquet2sql.py \
        --db "postgresql://${IDENTITY_MATCHING_POSTGRES_USER}:${IDENTITY_MATCHING_POSTGRES_PASSWORD}@${IDENTITY_MATCHING_POSTGRES_HOST}:${IDENTITY_MATCHING_POSTGRES_PORT}/${IDENTITY_MATCHING_POSTGRES_DB}" \
        --parquet "${IDENTITY_MATCHING_OUTPUT}-aliases.parquet" \
        --table "${IDENTITY_MATCHING_POSTGRES_ALIASES_TABLE}"

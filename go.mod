@@ -1,4 +1,4 @@
-module github.com/src-d/eee-identity-matching
+module github.com/src-d/identity-matching
 
 require (
 	github.com/apache/thrift v0.12.0 // indirect
