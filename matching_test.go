@@ -6,8 +6,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/src-d/eee-identity-matching/external"
 	"github.com/stretchr/testify/require"
+
+	"github.com/src-d/identity-matching/external"
 )
 
 var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")

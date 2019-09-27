@@ -1,0 +1,9 @@
+ index | id |      email       | name  | repo  
+-------+----+------------------+-------+-------
+     0 |  1 | bob@google.com   |       | 
+     1 |  1 |                  | bob   | repo1
+     2 |  1 |                  | bob   | repo2
+     3 |  3 | alice@google.com |       | 
+     4 |  3 |                  | alice | repo1
+(5 rows)
+

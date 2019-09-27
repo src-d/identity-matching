@@ -1,23 +1,18 @@
-version: '3.2'
+version: '3.4'
 services:
   gitbase:
-    image: srcd/gitbase:v0.23.1
+    image: mysql:8.0.17
+    container_name: im_gitbase
     restart: unless-stopped
-    ports:
-      - 3306:3306
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 1
     volumes:
-      - type: bind
-        source: ${GITBASE_VOLUME_SOURCE}
-        target: /opt/repos
-        read_only: true
-        consistency: delegated
-
+      - "./tests:/tests"
   postgres:
     image: postgres:10-alpine
+    container_name: im_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: superset
       POSTGRES_PASSWORD: superset
       POSTGRES_USER: superset
-    ports:
-      - 5432:5432

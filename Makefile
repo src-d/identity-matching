@@ -49,4 +49,33 @@ install-dev-deps:
 	pip3 install --user pycodestyle==2.5.0
 	go get -v golang.org/x/lint/golint github.com/mjibson/esc golang.org/x/tools/cmd/goimports
 
-.PHONY: check-style check-generate dev-deps fix-style
+docker-build:
+	docker build -t identity-matching .
+
+docker-test: docker-build
+	docker-compose up -d
+	while ! docker exec im_gitbase sh -c 'mysql -u root --password="" < /tests/test_commits.sql'; do sleep 1; done
+	while ! docker exec -it im_postgres psql -U superset -c "\dt"; do sleep 1; done
+	(sleep 120 && killall make) &
+	while ! docker run --network identity-matching_default \
+    -e IDENTITY_MATCHING_OUTPUT="identities" \
+    -e IDENTITY_MATCHING_GITBASE_HOST="im_gitbase" \
+    -e IDENTITY_MATCHING_GITBASE_PORT="3306" \
+    -e IDENTITY_MATCHING_GITBASE_USER="root" \
+    -e IDENTITY_MATCHING_GITBASE_PASSWORD="" \
+    -e IDENTITY_MATCHING_POSTGRES_DB="superset"\
+    -e IDENTITY_MATCHING_POSTGRES_USER="superset" \
+    -e IDENTITY_MATCHING_POSTGRES_PASSWORD="superset" \
+    -e IDENTITY_MATCHING_POSTGRES_HOST="im_postgres" \
+    -e IDENTITY_MATCHING_POSTGRES_PORT="5432" \
+    -e IDENTITY_MATCHING_POSTGRES_ALIASES_TABLE="aliases" \
+    -e IDENTITY_MATCHING_POSTGRES_IDENTITIES_TABLE="identities" \
+    -e IDENTITY_MATCHING_MAX_IDENTITIES="20" \
+	identity-matching; do sleep 1; done
+	docker exec -it im_postgres psql -U superset -c "SELECT * FROM identities ORDER BY id" > identities.txt
+	docker exec -it im_postgres psql -U superset -c "SELECT * FROM aliases ORDER BY id, name, repo" > aliases.txt
+	diff identities.txt tests/test_identities.txt && rm identities.txt
+	diff aliases.txt tests/test_aliases.txt && rm aliases.txt
+	docker-compose down
+
+.PHONY: check-style check-generate install-dev-deps fix-style docker-build docker-compose-build

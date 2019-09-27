@@ -12,9 +12,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
-	idmatch "github.com/src-d/eee-identity-matching"
-	"github.com/src-d/eee-identity-matching/external"
-	"github.com/src-d/eee-identity-matching/reporter"
+
+	idmatch "github.com/src-d/identity-matching"
+	"github.com/src-d/identity-matching/external"
+	"github.com/src-d/identity-matching/reporter"
 )
 
 type cliArgs struct {

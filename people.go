@@ -15,11 +15,12 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/sirupsen/logrus"
-	"github.com/src-d/eee-identity-matching/reporter"
 	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
 	"github.com/xitongsys/parquet-go/writer"
+
+	"github.com/src-d/identity-matching/reporter"
 )
 
 // rawPerson is taken from a single commit signature with only one name and one email
@@ -433,6 +434,7 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxIdleConns(0)
 
 	rows, err := db.QueryContext(ctx, findPeopleSQL)
 	if err != nil {
