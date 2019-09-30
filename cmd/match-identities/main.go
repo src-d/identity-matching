@@ -67,7 +67,7 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("unable to load the blacklist: %v", err)
 	}
-	people, nameFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist)
+	people, nameFreqs, emailFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist)
 	if err != nil {
 		logrus.Fatalf("unable to find people: %v", err)
 	}
@@ -91,6 +91,12 @@ func main() {
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
 	}).Info("primary names are set")
+
+	start = time.Now()
+	idmatch.SetPrimaryEmail(people, emailFreqs)
+	logrus.WithFields(logrus.Fields{
+		"elapsed": time.Since(start),
+	}).Info("primary emails are set")
 
 	logrus.Info("storing people")
 	start = time.Now()

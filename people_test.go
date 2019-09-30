@@ -141,7 +141,7 @@ func TestFindPeople(t *testing.T) {
 	if err != nil {
 		return
 	}
-	people, nameFreqs, err := FindPeople(
+	people, nameFreqs, emailFreqs, err := FindPeople(
 		context.TODO(), "0.0.0.0:3306", peopleFile.Name(), newTestBlacklist(t))
 	if err != nil {
 		return
@@ -154,6 +154,8 @@ func TestFindPeople(t *testing.T) {
 	}
 	require.Equal(t, expected, people)
 	require.Equal(t, map[string]int{"alice": 1, "admin": 1, "bob": 4}, nameFreqs)
+	require.Equal(t, map[string]int{"bob@google.com": 3, "alice@google.com": 1, "bad-email@domen": 1,
+		"someone@google.com": 1}, emailFreqs)
 }
 
 func TestReadPeopleFromDatabase(t *testing.T) {
