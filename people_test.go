@@ -267,3 +267,10 @@ func TestGetNamesFreqs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]int{"alice": 1, "admin": 1, "bob": 4}, freqs)
 }
+
+func TestGetEmailsFreqs(t *testing.T) {
+	freqs, err := getEmailsFreqs(rawPersons)
+	require.NoError(t, err)
+	require.Equal(t, map[string]int{"bob@google.com": 3, "alice@google.com": 1, "bad-email@domen": 1,
+		"someone@google.com": 1}, freqs)
+}
