@@ -196,8 +196,7 @@ func readFromParquet(pathAliases string) (People, string, error) {
 	var externalIDProvider, curExternalIDProvider string
 	for _, person := range parquetPersonAliases {
 		if _, ok := people[person.ID]; !ok {
-			people[person.ID] = &Person{
-				person.ID, nil, nil, "", "", ""}
+			people[person.ID] = &Person{person.ID, nil, nil, "", "", ""}
 		}
 		if person.Email != "" {
 			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
@@ -348,10 +347,7 @@ func FindPeople(ctx context.Context, connString string, cachePath string, blackl
 		return people, nil, nil, err
 	}
 	emailFreqs, err := getEmailsFreqs(persons)
-	if err != nil {
-		return people, nameFreqs, nil, err
-	}
-	return people, nameFreqs, emailFreqs, nil
+	return people, nameFreqs, emailFreqs, err
 }
 
 // getNamesFreqs calculates frequencies of rawPerson names
