@@ -43,6 +43,7 @@ type Person struct {
 	Emails         []string
 	ExternalID     string
 	PrimaryName    string
+	PrimaryEmail   string
 }
 
 func uniqueNamesWithRepo(names []NameWithRepo) []NameWithRepo {
@@ -141,6 +142,7 @@ type parquetPersonAlias struct {
 type parquetPersonIdentity struct {
 	ID                 int64  `parquet:"name=id, type=INT_64"`
 	PrimaryName        string `parquet:"name=primary_name, type=UTF8"`
+	PrimaryEmail       string `parquet:"name=primary_email, type=UTF8"`
 	ExternalIDProvider string `parquet:"name=external_id_provider, type=UTF8"`
 	ExternalID         string `parquet:"name=external_id, type=UTF8"`
 }
@@ -194,7 +196,7 @@ func readFromParquet(pathAliases string) (People, string, error) {
 	var externalIDProvider, curExternalIDProvider string
 	for _, person := range parquetPersonAliases {
 		if _, ok := people[person.ID]; !ok {
-			people[person.ID] = &Person{person.ID, nil, nil, "", ""}
+			people[person.ID] = &Person{person.ID, nil, nil, "", "", ""}
 		}
 		if person.Email != "" {
 			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
@@ -206,6 +208,7 @@ func readFromParquet(pathAliases string) (People, string, error) {
 	}
 	for _, p := range people {
 		people[p.ID].PrimaryName = id2PersonID[p.ID].PrimaryName
+		people[p.ID].PrimaryEmail = id2PersonID[p.ID].PrimaryEmail
 		people[p.ID].ExternalID = id2PersonID[p.ID].ExternalID
 		curExternalIDProvider = id2PersonID[p.ID].ExternalIDProvider
 		if people[p.ID].ExternalID != "" {
@@ -260,7 +263,8 @@ func (p People) WriteToParquet(path string, externalIDProvider string) (err erro
 			provider = externalIDProvider
 		}
 		if err := pwIDs.Write(parquetPersonIdentity{
-			val.ID, val.PrimaryName, provider, val.ExternalID}); err != nil {
+			val.ID, val.PrimaryName, val.PrimaryEmail, provider,
+			val.ExternalID}); err != nil {
 			return true
 		}
 		for _, email := range val.Emails {
@@ -328,22 +332,22 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 
 // FindPeople returns all the people in the database or from the disk cache.
 func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (
-	People, map[string]int, error) {
+	People, map[string]int, map[string]int, error) {
 	persons, err := findRawPersons(ctx, connString, cachePath)
 	reporter.Commit("people found", len(persons))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	people, err := newPeople(persons, blacklist)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	nameFreqs, err := getNamesFreqs(persons)
 	if err != nil {
-		return people, nil, err
+		return people, nil, nil, err
 	}
-
-	return people, nameFreqs, nil
+	emailFreqs, err := getEmailsFreqs(persons)
+	return people, nameFreqs, emailFreqs, err
 }
 
 // getNamesFreqs calculates frequencies of rawPerson names
@@ -355,6 +359,19 @@ func getNamesFreqs(persons []rawPerson) (map[string]int, error) {
 			return nil, err
 		}
 		freqs[name]++
+	}
+	return freqs, nil
+}
+
+// getEmailsFreqs calculates frequencies of rawPerson emails
+func getEmailsFreqs(persons []rawPerson) (map[string]int, error) {
+	freqs := map[string]int{}
+	for _, p := range persons {
+		email, err := cleanEmail(p.email)
+		if err != nil {
+			return nil, err
+		}
+		freqs[email]++
 	}
 	return freqs, nil
 }

@@ -15,10 +15,14 @@ require (
 	github.com/xanzy/go-gitlab v0.18.0
 	github.com/xitongsys/parquet-go v1.3.0
 	github.com/xitongsys/parquet-go-source v0.0.0-20190611011107-a9b8f78bccbe
-	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
+	golang.org/x/crypto v0.0.0-20191001141032-4663e185863a // indirect
+	golang.org/x/lint v0.0.0-20190930215403-16217165b5de
+	golang.org/x/net v0.0.0-20190930134127-c5a3c61f89f3 // indirect
 	golang.org/x/oauth2 v0.0.0-20190219183015-4b83411ed2b3
-	golang.org/x/text v0.3.0
-	golang.org/x/tools v0.0.0-20190709211700-7b25e351ac0e
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+	golang.org/x/sys v0.0.0-20190927073244-c990c680b611 // indirect
+	golang.org/x/text v0.3.2
+	golang.org/x/tools v0.0.0-20191001123449-8b695b21ef34
 	gonum.org/v1/gonum v0.0.0-20190624220246-e34e6b933b2b
 	gopkg.in/google/go-github.v15 v15.0.0
 )

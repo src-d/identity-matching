@@ -302,3 +302,22 @@ func SetPrimaryName(people People, nameFreqs map[string]int) {
 		p.PrimaryName = primaryName
 	}
 }
+
+// SetPrimaryEmail sets people primary email to the most frequent email of the person's identity
+func SetPrimaryEmail(people People, emailFreqs map[string]int) {
+	for _, p := range people {
+		maxFreq := 0
+		primaryEmail := ""
+		for _, email := range p.Emails {
+			if freq, ok := emailFreqs[email]; ok {
+				if freq > maxFreq {
+					maxFreq = freq
+					primaryEmail = email
+				}
+			} else {
+				logrus.Panicf("emailFreqs does not contain %s key", email)
+			}
+		}
+		p.PrimaryEmail = primaryEmail
+	}
+}
