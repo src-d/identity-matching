@@ -5,18 +5,25 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
 var rawPersons = []rawPerson{
-	{repo: "repo1", name: "Bob", email: "Bob@google.com"},
-	{repo: "repo2", name: "Bob", email: "Bob@google.com"},
-	{repo: "repo1", name: "Alice", email: "alice@google.com"},
-	{repo: "repo1", name: "Bob", email: "Bob@google.com"},
-	{repo: "repo1", name: "Bob", email: "bad-email@domen"},
-	{repo: "repo1", name: "admin", email: "someone@google.com"},
+	{repo: "repo1", name: "Bob", email: "Bob@google.com",
+		time: time.Now().AddDate(0, -6, 0)},
+	{repo: "repo2", name: "Bob", email: "Bob@google.com",
+		time: time.Now().AddDate(0, -18, 0)},
+	{repo: "repo1", name: "Alice", email: "alice@google.com",
+		time: time.Now().AddDate(0, -15, 0)},
+	{repo: "repo1", name: "Bob", email: "Bob@google.com",
+		time: time.Now().AddDate(0, -2, 0)},
+	{repo: "repo1", name: "Bob", email: "bad-email@domen",
+		time: time.Now().AddDate(0, -20, 0)},
+	{repo: "repo1", name: "admin", email: "someone@google.com",
+		time: time.Now().AddDate(0, -4, 0)},
 }
 
 func TestPeopleNew(t *testing.T) {
@@ -142,7 +149,7 @@ func TestFindPeople(t *testing.T) {
 		return
 	}
 	people, nameFreqs, emailFreqs, err := FindPeople(
-		context.TODO(), "0.0.0.0:3306", peopleFile.Name(), newTestBlacklist(t))
+		context.TODO(), "0.0.0.0:3306", peopleFile.Name(), newTestBlacklist(t), 12)
 	if err != nil {
 		return
 	}
@@ -153,9 +160,11 @@ func TestFindPeople(t *testing.T) {
 		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(t, expected, people)
-	require.Equal(t, map[string]int{"alice": 1, "admin": 1, "bob": 4}, nameFreqs)
-	require.Equal(t, map[string]int{"bob@google.com": 3, "alice@google.com": 1, "bad-email@domen": 1,
-		"someone@google.com": 1}, emailFreqs)
+	require.Equal(t, map[string]*Frequency{"alice": {0, 1},
+		"admin": {1, 1}, "bob": {2, 4}}, nameFreqs)
+	require.Equal(t, map[string]*Frequency{"bob@google.com": {2, 3},
+		"alice@google.com": {0, 1}, "bad-email@domen": {0, 1},
+		"someone@google.com": {1, 1}}, emailFreqs)
 }
 
 func TestReadPeopleFromDatabase(t *testing.T) {
@@ -174,13 +183,13 @@ func TestStoreAndReadPeopleOnDisk(t *testing.T) {
 	if err != nil {
 		return
 	}
-	expectedContent := `repo,name,email
-repo1,Bob,Bob@google.com
-repo2,Bob,Bob@google.com
-repo1,Alice,alice@google.com
-repo1,Bob,Bob@google.com
-repo1,Bob,bad-email@domen
-repo1,admin,someone@google.com
+	expectedContent := `repo,name,email,time
+repo1,Bob,Bob@google.com,` + rawPersons[0].time.String() + `
+repo2,Bob,Bob@google.com,` + rawPersons[1].time.String() + `
+repo1,Alice,alice@google.com,` + rawPersons[2].time.String() + `
+repo1,Bob,Bob@google.com,` + rawPersons[3].time.String() + `
+repo1,Bob,bad-email@domen,` + rawPersons[4].time.String() + `
+repo1,admin,someone@google.com,` + rawPersons[5].time.String() + `
 `
 	require.Equal(t, expectedContent, string(peopleFileContent))
 
@@ -189,12 +198,12 @@ repo1,admin,someone@google.com
 		return
 	}
 	expectedPersonsRead := []rawPerson{
-		0: {repo: "repo1", name: "bob", email: "bob@google.com"},
-		1: {repo: "repo2", name: "bob", email: "bob@google.com"},
-		2: {repo: "repo1", name: "alice", email: "alice@google.com"},
-		3: {repo: "repo1", name: "bob", email: "bob@google.com"},
-		4: {repo: "repo1", name: "bob", email: "bad-email@domen"},
-		5: {repo: "repo1", name: "admin", email: "someone@google.com"},
+		0: {repo: "repo1", name: "bob", email: "bob@google.com", time: rawPersons[0].time},
+		1: {repo: "repo2", name: "bob", email: "bob@google.com", time: rawPersons[1].time},
+		2: {repo: "repo1", name: "alice", email: "alice@google.com", time: rawPersons[2].time},
+		3: {repo: "repo1", name: "bob", email: "bob@google.com", time: rawPersons[3].time},
+		4: {repo: "repo1", name: "bob", email: "bad-email@domen", time: rawPersons[4].time},
+		5: {repo: "repo1", name: "admin", email: "someone@google.com", time: rawPersons[5].time},
 	}
 	require.Equal(t, expectedPersonsRead, personsRead)
 }
@@ -263,14 +272,15 @@ func TestNormalizeSpaces(t *testing.T) {
 }
 
 func TestGetNamesFreqs(t *testing.T) {
-	freqs, err := getNamesFreqs(rawPersons)
+	freqs, err := getNamesFreqs(rawPersons, time.Now().AddDate(0, -12, 0))
 	require.NoError(t, err)
-	require.Equal(t, map[string]int{"alice": 1, "admin": 1, "bob": 4}, freqs)
+	require.Equal(t, map[string]*Frequency{"alice": {0, 1}, "admin": {1, 1}, "bob": {2, 4}}, freqs)
 }
 
 func TestGetEmailsFreqs(t *testing.T) {
-	freqs, err := getEmailsFreqs(rawPersons)
+	freqs, err := getEmailsFreqs(rawPersons, time.Now().AddDate(0, -12, 0))
 	require.NoError(t, err)
-	require.Equal(t, map[string]int{"bob@google.com": 3, "alice@google.com": 1, "bad-email@domen": 1,
-		"someone@google.com": 1}, freqs)
+	require.Equal(t, map[string]*Frequency{"bob@google.com": {2, 3},
+		"alice@google.com": {0, 1}, "bad-email@domen": {0, 1},
+		"someone@google.com": {1, 1}}, freqs)
 }

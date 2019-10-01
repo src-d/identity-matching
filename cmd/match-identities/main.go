@@ -19,17 +19,19 @@ import (
 )
 
 type cliArgs struct {
-	Host          string
-	Port          uint
-	User          string
-	Password      string
-	Output        string
-	External      string
-	APIURL        string
-	Token         string
-	Cache         string
-	ExternalCache string
-	MaxIdentities int
+	Host           string
+	Port           uint
+	User           string
+	Password       string
+	Output         string
+	External       string
+	APIURL         string
+	Token          string
+	Cache          string
+	ExternalCache  string
+	MaxIdentities  int
+	RecentMonths   int
+	RecentMinCount int
 }
 
 func main() {
@@ -67,7 +69,8 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("unable to load the blacklist: %v", err)
 	}
-	people, nameFreqs, emailFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist)
+	people, nameFreqs, emailFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist,
+		args.RecentMonths)
 	if err != nil {
 		logrus.Fatalf("unable to find people: %v", err)
 	}
@@ -87,13 +90,13 @@ func main() {
 	}).Info("reduced people")
 
 	start = time.Now()
-	idmatch.SetPrimaryName(people, nameFreqs)
+	idmatch.SetPrimaryName(people, nameFreqs, args.RecentMinCount)
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
 	}).Info("primary names are set")
 
 	start = time.Now()
-	idmatch.SetPrimaryEmail(people, emailFreqs)
+	idmatch.SetPrimaryEmail(people, emailFreqs, args.RecentMinCount)
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
 	}).Info("primary emails are set")
@@ -136,6 +139,13 @@ func parseArgs() cliArgs {
 		"If a person has more than this number of unique names and unique emails summed, "+
 			"no more identities will be merged. If the identities are matched by an external API "+
 			"or by email this limitation can be violated.")
+	flag.IntVar(&args.RecentMonths, "months", 12,
+		"Number of previous months to consider first when calculating stats for the primary"+
+			"name and email setting.")
+	flag.IntVar(&args.RecentMinCount, "min-count", 5,
+		"Minimal total number of commits the identity should have in a recent period so that"+
+			"the stats only for the recent period were used for calculating the primary name and "+
+			"email. Otherwise all the commits will be taken into consideration.")
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
 

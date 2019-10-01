@@ -285,39 +285,64 @@ func componentUniqueEmailsAndNames(graph *simple.UndirectedGraph, n simplegraph.
 }
 
 // SetPrimaryName sets people primary name to the most frequent name of the person's identity
-func SetPrimaryName(people People, nameFreqs map[string]int) {
+func SetPrimaryName(people People, nameFreqs map[string]*Frequency, minRecentCount int) {
+
 	for _, p := range people {
-		maxFreq := 0
-		primaryName := ""
+		recentMaxFreq := 0
+		totalMaxFreq := 0
+		sumRecentCount := 0
+		recentPrimaryName := ""
+		totalPrimaryName := ""
 		for _, name := range p.NamesWithRepos {
 			if freq, ok := nameFreqs[name.Name]; ok {
-				if freq > maxFreq {
-					maxFreq = freq
-					primaryName = name.Name
+				sumRecentCount += freq.recent
+				if freq.recent > recentMaxFreq {
+					recentMaxFreq = freq.recent
+					recentPrimaryName = name.Name
+				}
+				if freq.total > totalMaxFreq {
+					totalMaxFreq = freq.total
+					totalPrimaryName = name.Name
 				}
 			} else {
 				logrus.Panicf("nameFreqs does not contain %s key", name.Name)
 			}
 		}
-		p.PrimaryName = primaryName
+		if sumRecentCount >= minRecentCount {
+			p.PrimaryName = recentPrimaryName
+		} else {
+			p.PrimaryName = totalPrimaryName
+		}
 	}
 }
 
 // SetPrimaryEmail sets people primary email to the most frequent email of the person's identity
-func SetPrimaryEmail(people People, emailFreqs map[string]int) {
+func SetPrimaryEmail(people People, emailFreqs map[string]*Frequency, minRecentCount int) {
 	for _, p := range people {
-		maxFreq := 0
-		primaryEmail := ""
+		recentMaxFreq := 0
+		totalMaxFreq := 0
+		sumRecentCount := 0
+		recentPrimaryEmail := ""
+		totalPrimaryEmail := ""
 		for _, email := range p.Emails {
 			if freq, ok := emailFreqs[email]; ok {
-				if freq > maxFreq {
-					maxFreq = freq
-					primaryEmail = email
+				sumRecentCount += freq.recent
+				if freq.recent > recentMaxFreq {
+					recentMaxFreq = freq.recent
+					recentPrimaryEmail = email
+				}
+				if freq.total > totalMaxFreq {
+					totalMaxFreq = freq.total
+					totalPrimaryEmail = email
 				}
 			} else {
 				logrus.Panicf("emailFreqs does not contain %s key", email)
 			}
 		}
-		p.PrimaryEmail = primaryEmail
+		if sumRecentCount >= minRecentCount {
+			p.PrimaryEmail = recentPrimaryEmail
+		} else {
+			p.PrimaryEmail = totalPrimaryEmail
+		}
 	}
 }

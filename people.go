@@ -28,6 +28,7 @@ type rawPerson struct {
 	repo  string
 	name  string
 	email string
+	time  time.Time
 }
 
 // NameWithRepo is a Name that can be linked to a specific repo.
@@ -331,8 +332,11 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 }
 
 // FindPeople returns all the people in the database or from the disk cache.
-func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (
-	People, map[string]int, map[string]int, error) {
+func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist,
+	recentMonths int) (People, map[string]*Frequency, map[string]*Frequency, error) {
+	if recentMonths == 0 {
+		recentMonths = 12
+	}
 	persons, err := findRawPersons(ctx, connString, cachePath)
 	reporter.Commit("people found", len(persons))
 	if err != nil {
@@ -342,42 +346,60 @@ func FindPeople(ctx context.Context, connString string, cachePath string, blackl
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	nameFreqs, err := getNamesFreqs(persons)
+	recentStartTime := time.Now().AddDate(0, -recentMonths, 0)
+	nameFreqs, err := getNamesFreqs(persons, recentStartTime)
 	if err != nil {
 		return people, nil, nil, err
 	}
-	emailFreqs, err := getEmailsFreqs(persons)
+	emailFreqs, err := getEmailsFreqs(persons, recentStartTime)
 	return people, nameFreqs, emailFreqs, err
 }
 
+// Frequency is a tuple of token frequencies for a certain recent period of time and for all time
+type Frequency struct {
+	recent, total int
+}
+
 // getNamesFreqs calculates frequencies of rawPerson names
-func getNamesFreqs(persons []rawPerson) (map[string]int, error) {
-	freqs := map[string]int{}
+func getNamesFreqs(persons []rawPerson, recentStartTime time.Time) (map[string]*Frequency, error) {
+	freqs := map[string]*Frequency{}
 	for _, p := range persons {
 		name, err := cleanName(p.name)
 		if err != nil {
 			return nil, err
 		}
-		freqs[name]++
+		if _, ok := freqs[name]; !ok {
+			freqs[name] = &Frequency{}
+		}
+		freqs[name].total++
+		if p.time.After(recentStartTime) {
+			freqs[name].recent++
+		}
 	}
 	return freqs, nil
 }
 
 // getEmailsFreqs calculates frequencies of rawPerson emails
-func getEmailsFreqs(persons []rawPerson) (map[string]int, error) {
-	freqs := map[string]int{}
+func getEmailsFreqs(persons []rawPerson, recentStartTime time.Time) (map[string]*Frequency, error) {
+	freqs := map[string]*Frequency{}
 	for _, p := range persons {
 		email, err := cleanEmail(p.email)
 		if err != nil {
 			return nil, err
 		}
-		freqs[email]++
+		if _, ok := freqs[email]; !ok {
+			freqs[email] = &Frequency{}
+		}
+		freqs[email].total++
+		if p.time.After(recentStartTime) {
+			freqs[email].recent++
+		}
 	}
 	return freqs, nil
 }
 
 const findPeopleSQL = `
-SELECT repository_id, commit_author_name, commit_author_email
+SELECT repository_id, commit_author_name, commit_author_email, commit_author_when
 FROM commits;
 `
 
@@ -433,7 +455,8 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 				repo:  record[header["repo"]],
 				name:  record[header["name"]],
 				email: record[header["email"]]}
-			if person.repo == "" || person.email == "" || person.name == "" {
+			person.time, err = time.Parse(time.RFC3339, record[header["time"]])
+			if err != nil || person.repo == "" || person.email == "" || person.name == "" {
 				continue
 			}
 			persons = append(persons, person)
@@ -467,10 +490,11 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 		spin.Suffix = fmt.Sprintf(" %d", i+1)
 		i++
 		var repo, name, email string
-		if err := rows.Scan(&repo, &name, &email); err != nil {
+		var time time.Time
+		if err := rows.Scan(&repo, &name, &email, time); err != nil {
 			return nil, err
 		}
-		result = append(result, rawPerson{repo, name, email})
+		result = append(result, rawPerson{repo, name, email, time})
 	}
 
 	return result, rows.Err()
@@ -496,12 +520,12 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 			err = writer.Error()
 		}
 	}()
-	err = writer.Write([]string{"repo", "name", "email"})
+	err = writer.Write([]string{"repo", "name", "email", "time"})
 	if err != nil {
 		return
 	}
 	for _, p := range result {
-		err = writer.Write([]string{p.repo, p.name, p.email})
+		err = writer.Write([]string{p.repo, p.name, p.email, p.time.String()})
 		if err != nil {
 			return
 		}

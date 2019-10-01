@@ -22,7 +22,7 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
 	golang.org/x/sys v0.0.0-20190927073244-c990c680b611 // indirect
 	golang.org/x/text v0.3.2
-	golang.org/x/tools v0.0.0-20191001123449-8b695b21ef34
+	golang.org/x/tools v0.0.0-20191007185444-6536af71d98a
 	gonum.org/v1/gonum v0.0.0-20190624220246-e34e6b933b2b
 	gopkg.in/google/go-github.v15 v15.0.0
 )
