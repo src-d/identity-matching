@@ -3,6 +3,8 @@ package reporter
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/sirupsen/logrus"
 )
 
 var report = map[string]interface{}{}
@@ -10,6 +12,12 @@ var report = map[string]interface{}{}
 // Commit values to the report
 // To print values to stdout use Write function
 func Commit(key string, value interface{}) {
+	if f, casted := value.(float32); casted && f != f {
+		logrus.Panicf("Commit(\"%s\", %v)", key, f)
+	}
+	if f, casted := value.(float64); casted && f != f {
+		logrus.Panicf("Commit(\"%s\", %v)", key, f)
+	}
 	report[key] = value
 }
 
@@ -35,7 +43,7 @@ func Write() {
 	if jsonString, err := json.Marshal(report); err == nil {
 		fmt.Println(string(jsonString))
 	} else {
-		panic(err)
+		logrus.Panicf("Failed to serialize to JSON: %v\nreport: %v", err, report)
 	}
 }
 
