@@ -207,6 +207,10 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 		}
 	}
 	mean, std := stat.MeanStdDev(componentsSize, nil)
+	if mean != mean {
+		mean = 0
+		std = 0
+	}
 	reporter.Commit("connected component size mean", mean)
 	reporter.Commit("connected component size std", std)
 	reporter.Commit("connected component size max", floats.Max(componentsSize))
