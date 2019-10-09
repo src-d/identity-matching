@@ -327,7 +327,7 @@ func SetPrimaryValues(people People, nameFreqs, emailFreqs map[string]*Frequency
 			names[i] = n.Name
 		}
 		return names
-		}, func(p *Person, name string) { p.PrimaryName = name }, minRecentCount)
+	}, func(p *Person, name string) { p.PrimaryName = name }, minRecentCount)
 	setPrimaryValue(people, emailFreqs, func(p *Person) []string { return p.Emails },
 		func(p *Person, email string) { p.PrimaryEmail = email }, minRecentCount)
 }

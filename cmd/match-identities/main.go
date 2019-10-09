@@ -134,8 +134,8 @@ func parseArgs() cliArgs {
 			"no more identities will be merged. If the identities are matched by an external API "+
 			"or by email this limitation can be violated.")
 	flag.IntVar(&args.RecentMonths, "months", 12,
-		"Number of preceding months to consider while calculating stats for detecting " +
-		"the primary names and emails.")
+		"Number of preceding months to consider while calculating stats for detecting "+
+			"the primary names and emails.")
 	flag.IntVar(&args.RecentMinCount, "min-count", 5,
 		"Minimum total number of commits the identity should have in the last --months so that "+
 			"the corresponding stats are used for detecting the primary names and emails. "+
