@@ -23,8 +23,8 @@ import (
 	"github.com/src-d/identity-matching/reporter"
 )
 
-// rawPerson is taken from a single commit signature with only one name and one email
-type rawPerson struct {
+// Commit is taken from a single commit signature with only one name and one email
+type Commit struct {
 	repo  string
 	name  string
 	email string
@@ -88,12 +88,12 @@ func (p Person) String() string {
 // People is a map of persons indexed by their ID.
 type People map[int64]*Person
 
-func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
+func newPeople(commits []Commit, blacklist Blacklist) (People, error) {
 	result := make(People)
 	var id int64
 	var nameWithRepo NameWithRepo
 
-	for _, p := range persons {
+	for _, p := range commits {
 		name, err := cleanName(p.name)
 		if err != nil {
 			return nil, err
@@ -335,67 +335,59 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist,
 	recentMonths int) (People, map[string]*Frequency, map[string]*Frequency, error) {
 	if recentMonths == 0 {
-		recentMonths = 12
+		panic(fmt.Errorf(
+			"recentMonths should be a positive integer"))
 	}
-	persons, err := findRawPersons(ctx, connString, cachePath)
-	reporter.Commit("people found", len(persons))
+	commits, err := findCommits(ctx, connString, cachePath)
+	reporter.Commit("people found", len(commits))
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	people, err := newPeople(persons, blacklist)
+	people, err := newPeople(commits, blacklist)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	recentStartTime := time.Now().AddDate(0, -recentMonths, 0)
-	nameFreqs, err := getNamesFreqs(persons, recentStartTime)
-	if err != nil {
-		return people, nil, nil, err
-	}
-	emailFreqs, err := getEmailsFreqs(persons, recentStartTime)
+	nameFreqs, emailFreqs, err := getStats(commits, recentStartTime)
 	return people, nameFreqs, emailFreqs, err
 }
 
-// Frequency is a tuple of token frequencies for a certain recent period of time and for all time
+// Frequency is a pair of word frequencies for a certain recent period of time and for all the time
 type Frequency struct {
-	recent, total int
+	Recent int
+	Total  int
 }
 
-// getNamesFreqs calculates frequencies of rawPerson names
-func getNamesFreqs(persons []rawPerson, recentStartTime time.Time) (map[string]*Frequency, error) {
+func countFreqs(commits []Commit, getter func(Commit) string, cleaner func(string) (string, error),
+	recentStartTime time.Time) (map[string]*Frequency, error) {
 	freqs := map[string]*Frequency{}
-	for _, p := range persons {
-		name, err := cleanName(p.name)
+	for _, commit := range commits {
+		value, err := cleaner(getter(commit))
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := freqs[name]; !ok {
-			freqs[name] = &Frequency{}
+		if _, ok := freqs[value]; !ok {
+			freqs[value] = &Frequency{}
 		}
-		freqs[name].total++
-		if p.time.After(recentStartTime) {
-			freqs[name].recent++
+		freqs[value].Total++
+		if commit.time.After(recentStartTime) {
+			freqs[value].Recent++
 		}
 	}
 	return freqs, nil
 }
 
-// getEmailsFreqs calculates frequencies of rawPerson emails
-func getEmailsFreqs(persons []rawPerson, recentStartTime time.Time) (map[string]*Frequency, error) {
-	freqs := map[string]*Frequency{}
-	for _, p := range persons {
-		email, err := cleanEmail(p.email)
-		if err != nil {
-			return nil, err
-		}
-		if _, ok := freqs[email]; !ok {
-			freqs[email] = &Frequency{}
-		}
-		freqs[email].total++
-		if p.time.After(recentStartTime) {
-			freqs[email].recent++
-		}
+// getStats calculates frequencies of names and emails in commits for future primary names and
+// emails detection. Stats are collected both for the given recent period of time and for all
+// the time.
+func getStats(commits []Commit, recentStartTime time.Time) (
+	nameFreqs, emailFreqs map[string]*Frequency, err error) {
+	nameFreqs, err = countFreqs(commits, func(c Commit) string { return c.name }, cleanName, recentStartTime)
+	if err != nil {
+		return nil, nil, err
 	}
-	return freqs, nil
+	emailFreqs, err = countFreqs(commits, func(c Commit) string { return c.email }, cleanEmail, recentStartTime)
+	return nameFreqs, emailFreqs, nil
 }
 
 const findPeopleSQL = `
@@ -403,7 +395,7 @@ SELECT repository_id, commit_author_name, commit_author_email, commit_author_whe
 FROM commits;
 `
 
-func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
+func readCommitsFromDisk(filePath string) (commits []Commit, err error) {
 	var file *os.File
 	file, err = os.Open(filePath)
 	if err != nil {
@@ -451,7 +443,7 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 				record[header[key]] = strings.TrimSpace(normalizeSpaces(strings.ToLower(normValue)))
 			}
 
-			person := rawPerson{
+			person := Commit{
 				repo:  record[header["repo"]],
 				name:  record[header["name"]],
 				email: record[header["email"]]}
@@ -459,7 +451,7 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 			if err != nil || person.repo == "" || person.email == "" || person.name == "" {
 				continue
 			}
-			persons = append(persons, person)
+			commits = append(commits, person)
 		}
 	}
 
@@ -469,7 +461,7 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 	return
 }
 
-func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, error) {
+func readCommitsFromDatabase(ctx context.Context, conn string) ([]Commit, error) {
 	db, err := sql.Open("mysql", conn)
 	if err != nil {
 		return nil, err
@@ -484,7 +476,7 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
 	spin.Start()
 	defer spin.Stop()
-	var result []rawPerson
+	var result []Commit
 	i := 0
 	for rows.Next() {
 		spin.Suffix = fmt.Sprintf(" %d", i+1)
@@ -494,13 +486,13 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 		if err := rows.Scan(&repo, &name, &email, time); err != nil {
 			return nil, err
 		}
-		result = append(result, rawPerson{repo, name, email, time})
+		result = append(result, Commit{repo, name, email, time})
 	}
 
 	return result, rows.Err()
 }
 
-func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
+func storePeopleOnDisk(filePath string, result []Commit) (err error) {
 	var file *os.File
 	file, err = os.Create(filePath)
 	if err != nil {
@@ -533,15 +525,15 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 	return
 }
 
-func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPerson, error) {
+func findCommits(ctx context.Context, connStr string, path string) ([]Commit, error) {
 	if _, err := os.Stat(path); err == nil {
-		return readRawPersonsFromDisk(path)
+		return readCommitsFromDisk(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	logrus.Printf("not cached in %s, loading from the database", path)
-	result, err := readRawPersonsFromDatabase(ctx, connStr)
+	result, err := readCommitsFromDatabase(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}

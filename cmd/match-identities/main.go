@@ -90,16 +90,10 @@ func main() {
 	}).Info("reduced people")
 
 	start = time.Now()
-	idmatch.SetPrimaryName(people, nameFreqs, args.RecentMinCount)
+	idmatch.SetPrimaryValues(people, nameFreqs, emailFreqs, args.RecentMinCount)
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
 	}).Info("primary names are set")
-
-	start = time.Now()
-	idmatch.SetPrimaryEmail(people, emailFreqs, args.RecentMinCount)
-	logrus.WithFields(logrus.Fields{
-		"elapsed": time.Since(start),
-	}).Info("primary emails are set")
 
 	logrus.Info("storing people")
 	start = time.Now()
@@ -140,12 +134,12 @@ func parseArgs() cliArgs {
 			"no more identities will be merged. If the identities are matched by an external API "+
 			"or by email this limitation can be violated.")
 	flag.IntVar(&args.RecentMonths, "months", 12,
-		"Number of previous months to consider first when calculating stats for the primary"+
-			"name and email setting.")
+		"Number of preceding months to consider while calculating stats for detecting " +
+		"the primary names and emails.")
 	flag.IntVar(&args.RecentMinCount, "min-count", 5,
-		"Minimal total number of commits the identity should have in a recent period so that"+
-			"the stats only for the recent period were used for calculating the primary name and "+
-			"email. Otherwise all the commits will be taken into consideration.")
+		"Minimum total number of commits the identity should have in the last --months so that "+
+			"the corresponding stats are used for detecting the primary names and emails. "+
+			"Otherwise, the stats collected through all the time will be used.")
 	flag.CommandLine.SortFlags = false
 	flag.Parse()
 
