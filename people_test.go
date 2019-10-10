@@ -160,9 +160,9 @@ func TestFindPeople(t *testing.T) {
 		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(t, expected, people)
-	require.Equal(t, map[string]*frequency{"alice": {0, 1},
+	require.Equal(t, map[string]*Frequency{"alice": {0, 1},
 		"admin": {1, 1}, "bob": {2, 4}}, nameFreqs)
-	require.Equal(t, map[string]*frequency{"bob@google.com": {2, 3},
+	require.Equal(t, map[string]*Frequency{"bob@google.com": {2, 3},
 		"alice@google.com": {0, 1}, "bad-email@domen": {0, 1},
 		"someone@google.com": {1, 1}}, emailFreqs)
 }
@@ -275,15 +275,15 @@ func TestCountFreqs(t *testing.T) {
 	freqs, err := countFreqs(Signatures, func(c signatureWithRepo) string { return c.name },
 	cleanName, time.Now().AddDate(0, -19, 0))
 	require.NoError(t, err)
-	require.Equal(t, map[string]*frequency{"alice": {1, 1}, "admin": {1, 1}, "bob": {3, 4}}, freqs)
+	require.Equal(t, map[string]*Frequency{"alice": {1, 1}, "admin": {1, 1}, "bob": {3, 4}}, freqs)
 }
 
 func TestGetStats(t *testing.T) {
 	nameFreqs, emailFreqs, err := getStats(Signatures, time.Now().AddDate(0, -12, 0))
 	require.NoError(t, err)
-	require.Equal(t, map[string]*frequency{"alice": {0, 1}, "admin": {1, 1}, "bob": {2, 4}},
+	require.Equal(t, map[string]*Frequency{"alice": {0, 1}, "admin": {1, 1}, "bob": {2, 4}},
 		nameFreqs)
-	require.Equal(t, map[string]*frequency{"bob@google.com": {2, 3},
+	require.Equal(t, map[string]*Frequency{"bob@google.com": {2, 3},
 		"alice@google.com": {0, 1}, "bad-email@domen": {0, 1},
 		"someone@google.com": {1, 1}}, emailFreqs)
 }

@@ -310,7 +310,7 @@ func TestSetPrimaryValue(t *testing.T) {
 		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
 			Emails: []string{"email@google.com"}},
 	}
-	emailFreqs := map[string]*frequency{
+	emailFreqs := map[string]*Frequency{
 		"Bob@google.com":   {5, 8},
 		"bobby@google.com": {2, 4},
 		"12345@gmail.com":  {1, 1},
@@ -352,7 +352,7 @@ func TestSetPrimaryValues(t *testing.T) {
 		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
 			Emails: []string{"email@google.com"}},
 	}
-	nameFreqs := map[string]*frequency{
+	nameFreqs := map[string]*Frequency{
 		"Bob":     {5, 10},
 		"Bob 1":   {1, 3},
 		"Bob 2":   {1, 1},
@@ -361,7 +361,7 @@ func TestSetPrimaryValues(t *testing.T) {
 		"Alice 1": {1, 5},
 		"admin":   {3, 5},
 	}
-	emailFreqs := map[string]*frequency{
+	emailFreqs := map[string]*Frequency{
 		"Bob@google.com":   {5, 8},
 		"bobby@google.com": {2, 4},
 		"12345@gmail.com":  {1, 1},

@@ -333,7 +333,7 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 
 // FindPeople returns all the people in the database or from the disk cache.
 func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist,
-	recentMonths int) (People, map[string]*frequency, map[string]*frequency, error) {
+	recentMonths int) (People, map[string]*Frequency, map[string]*Frequency, error) {
 	if recentMonths == 0 {
 		logrus.Panicf("recentMonths should be a positive integer")
 	}
@@ -351,22 +351,22 @@ func FindPeople(ctx context.Context, connString string, cachePath string, blackl
 	return people, nameFreqs, emailFreqs, err
 }
 
-// frequency is a pair of word frequencies for a certain recent period of time and for all the time
-type frequency struct {
+// Frequency is a pair of word frequencies for a certain recent period of time and for all the time
+type Frequency struct {
 	Recent int
 	Total  int
 }
 
 func countFreqs(commits []signatureWithRepo, getter func(signatureWithRepo) string, cleaner func(string) (string, error),
-	recentStartTime time.Time) (map[string]*frequency, error) {
-	freqs := map[string]*frequency{}
+	recentStartTime time.Time) (map[string]*Frequency, error) {
+	freqs := map[string]*Frequency{}
 	for _, commit := range commits {
 		value, err := cleaner(getter(commit))
 		if err != nil {
 			return nil, err
 		}
 		if _, ok := freqs[value]; !ok {
-			freqs[value] = &frequency{}
+			freqs[value] = &Frequency{}
 		}
 		freqs[value].Total++
 		if commit.time.After(recentStartTime) {
@@ -380,7 +380,7 @@ func countFreqs(commits []signatureWithRepo, getter func(signatureWithRepo) stri
 // emails detection. Stats are collected both for the given recent period of time and for all
 // the time.
 func getStats(commits []signatureWithRepo, recentStartTime time.Time) (
-	nameFreqs, emailFreqs map[string]*frequency, err error) {
+	nameFreqs, emailFreqs map[string]*Frequency, err error) {
 	nameFreqs, err = countFreqs(commits, func(c signatureWithRepo) string { return c.name }, cleanName, recentStartTime)
 	if err != nil {
 		return nil, nil, err
