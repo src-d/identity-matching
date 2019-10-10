@@ -273,7 +273,7 @@ func TestNormalizeSpaces(t *testing.T) {
 
 func TestCountFreqs(t *testing.T) {
 	freqs, err := countFreqs(Signatures, func(c signatureWithRepo) string { return c.name },
-	cleanName, time.Now().AddDate(0, -19, 0))
+		cleanName, time.Now().AddDate(0, -19, 0))
 	require.NoError(t, err)
 	require.Equal(t, map[string]*Frequency{"alice": {1, 1}, "admin": {1, 1}, "bob": {3, 4}}, freqs)
 }

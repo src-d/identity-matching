@@ -461,7 +461,7 @@ func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err e
 }
 
 func readSignaturesFromDatabase(ctx context.Context, conn string) ([]signatureWithRepo, error) {
-	db, err := sql.Open("mysql", conn + "?parseTime=true")
+	db, err := sql.Open("mysql", conn+"?parseTime=true")
 	if err != nil {
 		return nil, err
 	}
