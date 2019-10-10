@@ -22,7 +22,7 @@ class Person(NamedTuple):
         return "|".join(map(str, self.names | self.emails))
 
 
-class Commit(NamedTuple):
+class RawPerson(NamedTuple):
     """
     RawPerson is a single entry from initial data - name & email.
     """

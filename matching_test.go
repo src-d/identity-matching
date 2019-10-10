@@ -297,6 +297,48 @@ func TestReducePeopleSameNameDifferentExternalIds(t *testing.T) {
 	require.Equal(t, people, reducedPeople)
 }
 
+func TestSetPrimaryValue(t *testing.T) {
+	people := People{
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{
+			{"Bob", ""},
+			{"Bob 1", ""},
+			{"Bob 2", ""},
+			{"popular", ""}},
+			Emails: []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}, {"Alice 1", ""}},
+			Emails: []string{"alice@google.com", "al@google.com"}},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
+			Emails: []string{"email@google.com"}},
+	}
+	emailFreqs := map[string]*frequency{
+		"Bob@google.com":   {5, 8},
+		"bobby@google.com": {2, 4},
+		"12345@gmail.com":  {1, 1},
+		"email@google.com": {2, 4},
+		"alice@google.com": {1, 5},
+		"al@google.com":    {3, 3},
+		"admin@google.com": {6, 6},
+	}
+	expected := People{
+		1: {ID: 1, NamesWithRepos: []NameWithRepo{
+			{"Bob", ""},
+			{"Bob 1", ""},
+			{"Bob 2", ""},
+			{"popular", ""}},
+			Emails:      []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"},
+			PrimaryEmail: "Bob@google.com"},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}, {"Alice 1", ""}},
+			Emails:      []string{"alice@google.com", "al@google.com"},
+			PrimaryEmail: "al@google.com"},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
+			Emails:      []string{"email@google.com"},
+			PrimaryEmail: "email@google.com"},
+	}
+	setPrimaryValue(people, emailFreqs, func(p *Person) []string { return p.Emails },
+		func(p *Person, email string) { p.PrimaryEmail = email }, 2)
+	require.Equal(t, expected, people)
+}
+
 func TestSetPrimaryValues(t *testing.T) {
 	people := People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{
@@ -310,7 +352,7 @@ func TestSetPrimaryValues(t *testing.T) {
 		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
 			Emails: []string{"email@google.com"}},
 	}
-	nameFreqs := map[string]*Frequency{
+	nameFreqs := map[string]*frequency{
 		"Bob":     {5, 10},
 		"Bob 1":   {1, 3},
 		"Bob 2":   {1, 1},
@@ -319,7 +361,7 @@ func TestSetPrimaryValues(t *testing.T) {
 		"Alice 1": {1, 5},
 		"admin":   {3, 5},
 	}
-	emailFreqs := map[string]*Frequency{
+	emailFreqs := map[string]*frequency{
 		"Bob@google.com":   {5, 8},
 		"bobby@google.com": {2, 4},
 		"12345@gmail.com":  {1, 1},

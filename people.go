@@ -23,8 +23,8 @@ import (
 	"github.com/src-d/identity-matching/reporter"
 )
 
-// Commit is taken from a single commit signature with only one name and one email
-type Commit struct {
+// signatureWithRepo is a Git commit signature in a particular repository.
+type signatureWithRepo struct {
 	repo  string
 	name  string
 	email string
@@ -88,7 +88,7 @@ func (p Person) String() string {
 // People is a map of persons indexed by their ID.
 type People map[int64]*Person
 
-func newPeople(commits []Commit, blacklist Blacklist) (People, error) {
+func newPeople(commits []signatureWithRepo, blacklist Blacklist) (People, error) {
 	result := make(People)
 	var id int64
 	var nameWithRepo NameWithRepo
@@ -333,12 +333,11 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 
 // FindPeople returns all the people in the database or from the disk cache.
 func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist,
-	recentMonths int) (People, map[string]*Frequency, map[string]*Frequency, error) {
+	recentMonths int) (People, map[string]*frequency, map[string]*frequency, error) {
 	if recentMonths == 0 {
-		panic(fmt.Errorf(
-			"recentMonths should be a positive integer"))
+		logrus.Panicf("recentMonths should be a positive integer")
 	}
-	commits, err := findCommits(ctx, connString, cachePath)
+	commits, err := findSignatures(ctx, connString, cachePath)
 	reporter.Commit("people found", len(commits))
 	if err != nil {
 		return nil, nil, nil, err
@@ -352,22 +351,22 @@ func FindPeople(ctx context.Context, connString string, cachePath string, blackl
 	return people, nameFreqs, emailFreqs, err
 }
 
-// Frequency is a pair of word frequencies for a certain recent period of time and for all the time
-type Frequency struct {
+// frequency is a pair of word frequencies for a certain recent period of time and for all the time
+type frequency struct {
 	Recent int
 	Total  int
 }
 
-func countFreqs(commits []Commit, getter func(Commit) string, cleaner func(string) (string, error),
-	recentStartTime time.Time) (map[string]*Frequency, error) {
-	freqs := map[string]*Frequency{}
+func countFreqs(commits []signatureWithRepo, getter func(signatureWithRepo) string, cleaner func(string) (string, error),
+	recentStartTime time.Time) (map[string]*frequency, error) {
+	freqs := map[string]*frequency{}
 	for _, commit := range commits {
 		value, err := cleaner(getter(commit))
 		if err != nil {
 			return nil, err
 		}
 		if _, ok := freqs[value]; !ok {
-			freqs[value] = &Frequency{}
+			freqs[value] = &frequency{}
 		}
 		freqs[value].Total++
 		if commit.time.After(recentStartTime) {
@@ -380,13 +379,13 @@ func countFreqs(commits []Commit, getter func(Commit) string, cleaner func(strin
 // getStats calculates frequencies of names and emails in commits for future primary names and
 // emails detection. Stats are collected both for the given recent period of time and for all
 // the time.
-func getStats(commits []Commit, recentStartTime time.Time) (
-	nameFreqs, emailFreqs map[string]*Frequency, err error) {
-	nameFreqs, err = countFreqs(commits, func(c Commit) string { return c.name }, cleanName, recentStartTime)
+func getStats(commits []signatureWithRepo, recentStartTime time.Time) (
+	nameFreqs, emailFreqs map[string]*frequency, err error) {
+	nameFreqs, err = countFreqs(commits, func(c signatureWithRepo) string { return c.name }, cleanName, recentStartTime)
 	if err != nil {
 		return nil, nil, err
 	}
-	emailFreqs, err = countFreqs(commits, func(c Commit) string { return c.email }, cleanEmail, recentStartTime)
+	emailFreqs, err = countFreqs(commits, func(c signatureWithRepo) string { return c.email }, cleanEmail, recentStartTime)
 	return nameFreqs, emailFreqs, nil
 }
 
@@ -395,7 +394,7 @@ SELECT repository_id, commit_author_name, commit_author_email, commit_author_whe
 FROM commits;
 `
 
-func readCommitsFromDisk(filePath string) (commits []Commit, err error) {
+func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err error) {
 	var file *os.File
 	file, err = os.Open(filePath)
 	if err != nil {
@@ -443,7 +442,7 @@ func readCommitsFromDisk(filePath string) (commits []Commit, err error) {
 				record[header[key]] = strings.TrimSpace(normalizeSpaces(strings.ToLower(normValue)))
 			}
 
-			person := Commit{
+			person := signatureWithRepo{
 				repo:  record[header["repo"]],
 				name:  record[header["name"]],
 				email: record[header["email"]]}
@@ -461,7 +460,7 @@ func readCommitsFromDisk(filePath string) (commits []Commit, err error) {
 	return
 }
 
-func readCommitsFromDatabase(ctx context.Context, conn string) ([]Commit, error) {
+func readSignaturesFromDatabase(ctx context.Context, conn string) ([]signatureWithRepo, error) {
 	db, err := sql.Open("mysql", conn)
 	if err != nil {
 		return nil, err
@@ -476,7 +475,7 @@ func readCommitsFromDatabase(ctx context.Context, conn string) ([]Commit, error)
 	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
 	spin.Start()
 	defer spin.Stop()
-	var result []Commit
+	var result []signatureWithRepo
 	i := 0
 	for rows.Next() {
 		spin.Suffix = fmt.Sprintf(" %d", i+1)
@@ -486,13 +485,13 @@ func readCommitsFromDatabase(ctx context.Context, conn string) ([]Commit, error)
 		if err := rows.Scan(&repo, &name, &email, time); err != nil {
 			return nil, err
 		}
-		result = append(result, Commit{repo, name, email, time})
+		result = append(result, signatureWithRepo{repo, name, email, time})
 	}
 
 	return result, rows.Err()
 }
 
-func storePeopleOnDisk(filePath string, result []Commit) (err error) {
+func storePeopleOnDisk(filePath string, result []signatureWithRepo) (err error) {
 	var file *os.File
 	file, err = os.Create(filePath)
 	if err != nil {
@@ -525,15 +524,15 @@ func storePeopleOnDisk(filePath string, result []Commit) (err error) {
 	return
 }
 
-func findCommits(ctx context.Context, connStr string, path string) ([]Commit, error) {
+func findSignatures(ctx context.Context, connStr string, path string) ([]signatureWithRepo, error) {
 	if _, err := os.Stat(path); err == nil {
-		return readCommitsFromDisk(path)
+		return readSignaturesFromDisk(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	logrus.Printf("not cached in %s, loading from the database", path)
-	result, err := readCommitsFromDatabase(ctx, connStr)
+	result, err := readSignaturesFromDatabase(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}

@@ -284,7 +284,7 @@ func componentUniqueEmailsAndNames(graph *simple.UndirectedGraph, n simplegraph.
 	return len(emails), len(names)
 }
 
-func setPrimaryValue(people People, freqs map[string]*Frequency, getter func(*Person) []string,
+func setPrimaryValue(people People, freqs map[string]*frequency, getter func(*Person) []string,
 	setter func(*Person, string), minRecentCount int) {
 	for _, p := range people {
 		recentMaxFreq := 0
@@ -319,7 +319,7 @@ func setPrimaryValue(people People, freqs map[string]*Frequency, getter func(*Pe
 // the person's identity. Stats for the fixed recent period of time are used if there are at least
 // minRecentCount commits made by the person's identity in that period. Otherwise the stats
 // for all the time are used.
-func SetPrimaryValues(people People, nameFreqs, emailFreqs map[string]*Frequency,
+func SetPrimaryValues(people People, nameFreqs, emailFreqs map[string]*frequency,
 	minRecentCount int) {
 	setPrimaryValue(people, nameFreqs, func(p *Person) []string {
 		names := make([]string, len(p.NamesWithRepos))

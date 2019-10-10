@@ -93,7 +93,7 @@ func main() {
 	idmatch.SetPrimaryValues(people, nameFreqs, emailFreqs, args.RecentMinCount)
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
-	}).Info("primary names are set")
+	}).Info("primary names and emails are set")
 
 	logrus.Info("storing people")
 	start = time.Now()

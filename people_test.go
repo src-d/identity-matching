@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var Commits = []Commit{
+var Signatures = []signatureWithRepo{
 	{repo: "repo1", name: "Bob", email: "Bob@google.com",
 		time: time.Now().AddDate(0, -6, 0)},
 	{repo: "repo2", name: "Bob", email: "Bob@google.com",
@@ -33,14 +33,14 @@ func TestPeopleNew(t *testing.T) {
 		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"alice", ""}}, Emails: []string{"alice@google.com"}},
 		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
-	people, err := newPeople(Commits, newTestBlacklist(t))
+	people, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(t, err)
 	require.Equal(t, expected, people)
 }
 
 func TestTwoPeopleMerge(t *testing.T) {
 	require := require.New(t)
-	people, err := newPeople(Commits, newTestBlacklist(t))
+	people, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(err)
 	mergedID, err := people.Merge(1, 2)
 	expected := People{
@@ -75,7 +75,7 @@ func TestTwoPeopleMerge(t *testing.T) {
 }
 
 func TestFourPeopleMerge(t *testing.T) {
-	people, err := newPeople(Commits, newTestBlacklist(t))
+	people, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(t, err)
 	mergedID, err := people.Merge(1, 2, 3, 4)
 	expected := People{
@@ -89,7 +89,7 @@ func TestFourPeopleMerge(t *testing.T) {
 }
 
 func TestDifferentExternalIdsMerge(t *testing.T) {
-	people, err := newPeople(Commits, newTestBlacklist(t))
+	people, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(t, err)
 	people[1].ExternalID = "id1"
 	people[2].ExternalID = "id2"
@@ -98,7 +98,7 @@ func TestDifferentExternalIdsMerge(t *testing.T) {
 }
 
 func TestPeopleForEach(t *testing.T) {
-	people, err := newPeople(Commits, newTestBlacklist(t))
+	people, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(t, err)
 	var keys = make([]int64, 0, len(people))
 	people.ForEach(func(key int64, val *Person) bool {
@@ -118,19 +118,19 @@ func tempFile(t *testing.T, pattern string) (*os.File, func()) {
 	}
 }
 
-func TestFindCommits(t *testing.T) {
+func TestFindSignatures(t *testing.T) {
 	peopleFile, cleanup := tempFile(t, "*.csv")
 	defer cleanup()
 
-	err := storePeopleOnDisk(peopleFile.Name(), Commits)
+	err := storePeopleOnDisk(peopleFile.Name(), Signatures)
 	if err != nil {
 		return
 	}
-	people, err := findCommits(context.TODO(), "0.0.0.0:3306", peopleFile.Name())
+	people, err := findSignatures(context.TODO(), "0.0.0.0:3306", peopleFile.Name())
 	if err != nil {
 		return
 	}
-	require.Equal(t, []Commit{
+	require.Equal(t, []signatureWithRepo{
 		{repo: "repo1", name: "bob", email: "bob@google.com"},
 		{repo: "repo2", name: "bob", email: "bob@google.com"},
 		{repo: "repo1", name: "alice", email: "alice@google.com"},
@@ -144,7 +144,7 @@ func TestFindPeople(t *testing.T) {
 	peopleFile, cleanup := tempFile(t, "*.csv")
 	defer cleanup()
 
-	err := storePeopleOnDisk(peopleFile.Name(), Commits)
+	err := storePeopleOnDisk(peopleFile.Name(), Signatures)
 	if err != nil {
 		return
 	}
@@ -160,9 +160,9 @@ func TestFindPeople(t *testing.T) {
 		4: {ID: 4, NamesWithRepos: []NameWithRepo{{"bob", ""}}, Emails: []string{"bob@google.com"}},
 	}
 	require.Equal(t, expected, people)
-	require.Equal(t, map[string]*Frequency{"alice": {0, 1},
+	require.Equal(t, map[string]*frequency{"alice": {0, 1},
 		"admin": {1, 1}, "bob": {2, 4}}, nameFreqs)
-	require.Equal(t, map[string]*Frequency{"bob@google.com": {2, 3},
+	require.Equal(t, map[string]*frequency{"bob@google.com": {2, 3},
 		"alice@google.com": {0, 1}, "bad-email@domen": {0, 1},
 		"someone@google.com": {1, 1}}, emailFreqs)
 }
@@ -175,7 +175,7 @@ func TestStoreAndReadPeopleOnDisk(t *testing.T) {
 	peopleFile, cleanup := tempFile(t, "*.csv")
 	defer cleanup()
 
-	err := storePeopleOnDisk(peopleFile.Name(), Commits)
+	err := storePeopleOnDisk(peopleFile.Name(), Signatures)
 	if err != nil {
 		return
 	}
@@ -184,26 +184,26 @@ func TestStoreAndReadPeopleOnDisk(t *testing.T) {
 		return
 	}
 	expectedContent := `repo,name,email,time
-repo1,Bob,Bob@google.com,` + Commits[0].time.String() + `
-repo2,Bob,Bob@google.com,` + Commits[1].time.String() + `
-repo1,Alice,alice@google.com,` + Commits[2].time.String() + `
-repo1,Bob,Bob@google.com,` + Commits[3].time.String() + `
-repo1,Bob,bad-email@domen,` + Commits[4].time.String() + `
-repo1,admin,someone@google.com,` + Commits[5].time.String() + `
+repo1,Bob,Bob@google.com,` + Signatures[0].time.String() + `
+repo2,Bob,Bob@google.com,` + Signatures[1].time.String() + `
+repo1,Alice,alice@google.com,` + Signatures[2].time.String() + `
+repo1,Bob,Bob@google.com,` + Signatures[3].time.String() + `
+repo1,Bob,bad-email@domen,` + Signatures[4].time.String() + `
+repo1,admin,someone@google.com,` + Signatures[5].time.String() + `
 `
 	require.Equal(t, expectedContent, string(peopleFileContent))
 
-	commitsRead, err := readCommitsFromDisk(peopleFile.Name())
+	commitsRead, err := readSignaturesFromDisk(peopleFile.Name())
 	if err != nil {
 		return
 	}
-	expectedPersonsRead := []Commit{
-		0: {repo: "repo1", name: "bob", email: "bob@google.com", time: Commits[0].time},
-		1: {repo: "repo2", name: "bob", email: "bob@google.com", time: Commits[1].time},
-		2: {repo: "repo1", name: "alice", email: "alice@google.com", time: Commits[2].time},
-		3: {repo: "repo1", name: "bob", email: "bob@google.com", time: Commits[3].time},
-		4: {repo: "repo1", name: "bob", email: "bad-email@domen", time: Commits[4].time},
-		5: {repo: "repo1", name: "admin", email: "someone@google.com", time: Commits[5].time},
+	expectedPersonsRead := []signatureWithRepo{
+		0: {repo: "repo1", name: "bob", email: "bob@google.com", time: Signatures[0].time},
+		1: {repo: "repo2", name: "bob", email: "bob@google.com", time: Signatures[1].time},
+		2: {repo: "repo1", name: "alice", email: "alice@google.com", time: Signatures[2].time},
+		3: {repo: "repo1", name: "bob", email: "bob@google.com", time: Signatures[3].time},
+		4: {repo: "repo1", name: "bob", email: "bad-email@domen", time: Signatures[4].time},
+		5: {repo: "repo1", name: "admin", email: "someone@google.com", time: Signatures[5].time},
 	}
 	require.Equal(t, expectedPersonsRead, commitsRead)
 }
@@ -212,7 +212,7 @@ func TestWriteAndReadParquet(t *testing.T) {
 	tmpfile, cleanup := tempFile(t, "*.parquet")
 	defer cleanup()
 
-	expectedPeople, err := newPeople(Commits, newTestBlacklist(t))
+	expectedPeople, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(t, err)
 
 	err = expectedPeople.WriteToParquet(tmpfile.Name(), "")
@@ -228,7 +228,7 @@ func TestWriteAndReadParquetWithExternalID(t *testing.T) {
 	tmpfile, cleanup := tempFile(t, "*.parquet")
 	defer cleanup()
 
-	expectedPeople, err := newPeople(Commits, newTestBlacklist(t))
+	expectedPeople, err := newPeople(Signatures, newTestBlacklist(t))
 	require.NoError(t, err)
 
 	expectedIDProvider := "test"
@@ -271,12 +271,19 @@ func TestNormalizeSpaces(t *testing.T) {
 	require.Equal("12", normalizeSpaces("12"))
 }
 
-func TestGetStats(t *testing.T) {
-	nameFreqs, emailFreqs, err := getStats(Commits, time.Now().AddDate(0, -12, 0))
+func TestCountFreqs(t *testing.T) {
+	freqs, err := countFreqs(Signatures, func(c signatureWithRepo) string { return c.name },
+	cleanName, time.Now().AddDate(0, -19, 0))
 	require.NoError(t, err)
-	require.Equal(t, map[string]*Frequency{"alice": {0, 1}, "admin": {1, 1}, "bob": {2, 4}},
+	require.Equal(t, map[string]*frequency{"alice": {1, 1}, "admin": {1, 1}, "bob": {3, 4}}, freqs)
+}
+
+func TestGetStats(t *testing.T) {
+	nameFreqs, emailFreqs, err := getStats(Signatures, time.Now().AddDate(0, -12, 0))
+	require.NoError(t, err)
+	require.Equal(t, map[string]*frequency{"alice": {0, 1}, "admin": {1, 1}, "bob": {2, 4}},
 		nameFreqs)
-	require.Equal(t, map[string]*Frequency{"bob@google.com": {2, 3},
+	require.Equal(t, map[string]*frequency{"bob@google.com": {2, 3},
 		"alice@google.com": {0, 1}, "bad-email@domen": {0, 1},
 		"someone@google.com": {1, 1}}, emailFreqs)
 }
