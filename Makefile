@@ -71,6 +71,8 @@ docker-test: docker-build
     -e IDENTITY_MATCHING_POSTGRES_ALIASES_TABLE="aliases" \
     -e IDENTITY_MATCHING_POSTGRES_IDENTITIES_TABLE="identities" \
     -e IDENTITY_MATCHING_MAX_IDENTITIES="20" \
+    -e IDENTITY_MATCHING_MONTHS="12" \
+    -e IDENTITY_MATCHING_MIN_COUNT="5" \
 	identity-matching; do sleep 1; done
 	docker exec -it im_postgres psql -U superset -c "SELECT * FROM identities ORDER BY id" > identities.txt
 	docker exec -it im_postgres psql -U superset -c "SELECT * FROM aliases ORDER BY id, name, repo" > aliases.txt

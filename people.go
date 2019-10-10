@@ -23,11 +23,12 @@ import (
 	"github.com/src-d/identity-matching/reporter"
 )
 
-// rawPerson is taken from a single commit signature with only one name and one email
-type rawPerson struct {
+// signatureWithRepo is a Git commit signature in a particular repository.
+type signatureWithRepo struct {
 	repo  string
 	name  string
 	email string
+	time  time.Time
 }
 
 // NameWithRepo is a Name that can be linked to a specific repo.
@@ -87,12 +88,12 @@ func (p Person) String() string {
 // People is a map of persons indexed by their ID.
 type People map[int64]*Person
 
-func newPeople(persons []rawPerson, blacklist Blacklist) (People, error) {
+func newPeople(commits []signatureWithRepo, blacklist Blacklist) (People, error) {
 	result := make(People)
 	var id int64
 	var nameWithRepo NameWithRepo
 
-	for _, p := range persons {
+	for _, p := range commits {
 		name, err := cleanName(p.name)
 		if err != nil {
 			return nil, err
@@ -331,57 +332,69 @@ func (p People) ForEach(f func(int64, *Person) bool) {
 }
 
 // FindPeople returns all the people in the database or from the disk cache.
-func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist) (
-	People, map[string]int, map[string]int, error) {
-	persons, err := findRawPersons(ctx, connString, cachePath)
-	reporter.Commit("people found", len(persons))
+func FindPeople(ctx context.Context, connString string, cachePath string, blacklist Blacklist,
+	recentMonths int) (People, map[string]*Frequency, map[string]*Frequency, error) {
+	if recentMonths == 0 {
+		logrus.Panicf("recentMonths should be a positive integer")
+	}
+	commits, err := findSignatures(ctx, connString, cachePath)
+	reporter.Commit("people found", len(commits))
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	people, err := newPeople(persons, blacklist)
+	people, err := newPeople(commits, blacklist)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	nameFreqs, err := getNamesFreqs(persons)
-	if err != nil {
-		return people, nil, nil, err
-	}
-	emailFreqs, err := getEmailsFreqs(persons)
+	recentStartTime := time.Now().AddDate(0, -recentMonths, 0)
+	nameFreqs, emailFreqs, err := getStats(commits, recentStartTime)
 	return people, nameFreqs, emailFreqs, err
 }
 
-// getNamesFreqs calculates frequencies of rawPerson names
-func getNamesFreqs(persons []rawPerson) (map[string]int, error) {
-	freqs := map[string]int{}
-	for _, p := range persons {
-		name, err := cleanName(p.name)
+// Frequency is a pair of word frequencies for a certain recent period of time and for all the time
+type Frequency struct {
+	Recent int
+	Total  int
+}
+
+func countFreqs(commits []signatureWithRepo, getter func(signatureWithRepo) string, cleaner func(string) (string, error),
+	recentStartTime time.Time) (map[string]*Frequency, error) {
+	freqs := map[string]*Frequency{}
+	for _, commit := range commits {
+		value, err := cleaner(getter(commit))
 		if err != nil {
 			return nil, err
 		}
-		freqs[name]++
+		if _, ok := freqs[value]; !ok {
+			freqs[value] = &Frequency{}
+		}
+		freqs[value].Total++
+		if commit.time.After(recentStartTime) {
+			freqs[value].Recent++
+		}
 	}
 	return freqs, nil
 }
 
-// getEmailsFreqs calculates frequencies of rawPerson emails
-func getEmailsFreqs(persons []rawPerson) (map[string]int, error) {
-	freqs := map[string]int{}
-	for _, p := range persons {
-		email, err := cleanEmail(p.email)
-		if err != nil {
-			return nil, err
-		}
-		freqs[email]++
+// getStats calculates frequencies of names and emails in commits for future primary names and
+// emails detection. Stats are collected both for the given recent period of time and for all
+// the time.
+func getStats(commits []signatureWithRepo, recentStartTime time.Time) (
+	nameFreqs, emailFreqs map[string]*Frequency, err error) {
+	nameFreqs, err = countFreqs(commits, func(c signatureWithRepo) string { return c.name }, cleanName, recentStartTime)
+	if err != nil {
+		return nil, nil, err
 	}
-	return freqs, nil
+	emailFreqs, err = countFreqs(commits, func(c signatureWithRepo) string { return c.email }, cleanEmail, recentStartTime)
+	return nameFreqs, emailFreqs, nil
 }
 
 const findPeopleSQL = `
-SELECT repository_id, commit_author_name, commit_author_email
+SELECT repository_id, commit_author_name, commit_author_email, commit_author_when
 FROM commits;
 `
 
-func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
+func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err error) {
 	var file *os.File
 	file, err = os.Open(filePath)
 	if err != nil {
@@ -429,14 +442,15 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 				record[header[key]] = strings.TrimSpace(normalizeSpaces(strings.ToLower(normValue)))
 			}
 
-			person := rawPerson{
+			person := signatureWithRepo{
 				repo:  record[header["repo"]],
 				name:  record[header["name"]],
 				email: record[header["email"]]}
-			if person.repo == "" || person.email == "" || person.name == "" {
+			person.time, err = time.Parse(time.RFC3339, record[header["time"]])
+			if err != nil || person.repo == "" || person.email == "" || person.name == "" {
 				continue
 			}
-			persons = append(persons, person)
+			commits = append(commits, person)
 		}
 	}
 
@@ -446,8 +460,8 @@ func readRawPersonsFromDisk(filePath string) (persons []rawPerson, err error) {
 	return
 }
 
-func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, error) {
-	db, err := sql.Open("mysql", conn)
+func readSignaturesFromDatabase(ctx context.Context, conn string) ([]signatureWithRepo, error) {
+	db, err := sql.Open("mysql", conn+"?parseTime=true")
 	if err != nil {
 		return nil, err
 	}
@@ -461,22 +475,23 @@ func readRawPersonsFromDatabase(ctx context.Context, conn string) ([]rawPerson, 
 	spin := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
 	spin.Start()
 	defer spin.Stop()
-	var result []rawPerson
+	var result []signatureWithRepo
 	i := 0
 	for rows.Next() {
 		spin.Suffix = fmt.Sprintf(" %d", i+1)
 		i++
 		var repo, name, email string
-		if err := rows.Scan(&repo, &name, &email); err != nil {
+		var time time.Time
+		if err := rows.Scan(&repo, &name, &email, &time); err != nil {
 			return nil, err
 		}
-		result = append(result, rawPerson{repo, name, email})
+		result = append(result, signatureWithRepo{repo, name, email, time})
 	}
 
 	return result, rows.Err()
 }
 
-func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
+func storePeopleOnDisk(filePath string, result []signatureWithRepo) (err error) {
 	var file *os.File
 	file, err = os.Create(filePath)
 	if err != nil {
@@ -496,12 +511,12 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 			err = writer.Error()
 		}
 	}()
-	err = writer.Write([]string{"repo", "name", "email"})
+	err = writer.Write([]string{"repo", "name", "email", "time"})
 	if err != nil {
 		return
 	}
 	for _, p := range result {
-		err = writer.Write([]string{p.repo, p.name, p.email})
+		err = writer.Write([]string{p.repo, p.name, p.email, p.time.String()})
 		if err != nil {
 			return
 		}
@@ -509,15 +524,15 @@ func storePeopleOnDisk(filePath string, result []rawPerson) (err error) {
 	return
 }
 
-func findRawPersons(ctx context.Context, connStr string, path string) ([]rawPerson, error) {
+func findSignatures(ctx context.Context, connStr string, path string) ([]signatureWithRepo, error) {
 	if _, err := os.Stat(path); err == nil {
-		return readRawPersonsFromDisk(path)
+		return readSignaturesFromDisk(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
 	logrus.Printf("not cached in %s, loading from the database", path)
-	result, err := readRawPersonsFromDatabase(ctx, connStr)
+	result, err := readSignaturesFromDatabase(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}

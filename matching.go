@@ -290,40 +290,50 @@ func componentUniqueEmailsAndNames(graph *simple.UndirectedGraph, n simplegraph.
 	return len(emails), len(names)
 }
 
-// SetPrimaryName sets people primary name to the most frequent name of the person's identity
-func SetPrimaryName(people People, nameFreqs map[string]int) {
+func setPrimaryValue(people People, freqs map[string]*Frequency, getter func(*Person) []string,
+	setter func(*Person, string), minRecentCount int) {
 	for _, p := range people {
-		maxFreq := 0
-		primaryName := ""
-		for _, name := range p.NamesWithRepos {
-			if freq, ok := nameFreqs[name.Name]; ok {
-				if freq > maxFreq {
-					maxFreq = freq
-					primaryName = name.Name
+		recentMaxFreq := 0
+		totalMaxFreq := 0
+		sumRecentCount := 0
+		recentPrimaryValue := ""
+		totalPrimaryValue := ""
+		for _, value := range getter(p) {
+			if freq, ok := freqs[value]; ok {
+				sumRecentCount += freq.Recent
+				if freq.Recent > recentMaxFreq {
+					recentMaxFreq = freq.Recent
+					recentPrimaryValue = value
+				}
+				if freq.Total > totalMaxFreq {
+					totalMaxFreq = freq.Total
+					totalPrimaryValue = value
 				}
 			} else {
-				logrus.Panicf("nameFreqs does not contain %s key", name.Name)
+				logrus.Panicf("freqs does not contain %s key", value)
 			}
 		}
-		p.PrimaryName = primaryName
+		if sumRecentCount >= minRecentCount {
+			setter(p, recentPrimaryValue)
+		} else {
+			setter(p, totalPrimaryValue)
+		}
 	}
 }
 
-// SetPrimaryEmail sets people primary email to the most frequent email of the person's identity
-func SetPrimaryEmail(people People, emailFreqs map[string]int) {
-	for _, p := range people {
-		maxFreq := 0
-		primaryEmail := ""
-		for _, email := range p.Emails {
-			if freq, ok := emailFreqs[email]; ok {
-				if freq > maxFreq {
-					maxFreq = freq
-					primaryEmail = email
-				}
-			} else {
-				logrus.Panicf("emailFreqs does not contain %s key", email)
-			}
+// SetPrimaryValues sets people primary name and email to the most frequent name and email of
+// the person's identity. Stats for the fixed recent period of time are used if there are at least
+// minRecentCount commits made by the person's identity in that period. Otherwise the stats
+// for all the time are used.
+func SetPrimaryValues(people People, nameFreqs, emailFreqs map[string]*Frequency,
+	minRecentCount int) {
+	setPrimaryValue(people, nameFreqs, func(p *Person) []string {
+		names := make([]string, len(p.NamesWithRepos))
+		for i, n := range p.NamesWithRepos {
+			names[i] = n.Name
 		}
-		p.PrimaryEmail = primaryEmail
-	}
+		return names
+	}, func(p *Person, name string) { p.PrimaryName = name }, minRecentCount)
+	setPrimaryValue(people, emailFreqs, func(p *Person) []string { return p.Emails },
+		func(p *Person, email string) { p.PrimaryEmail = email }, minRecentCount)
 }

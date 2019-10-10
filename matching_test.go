@@ -297,72 +297,94 @@ func TestReducePeopleSameNameDifferentExternalIds(t *testing.T) {
 	require.Equal(t, people, reducedPeople)
 }
 
-func TestSetPrimaryName(t *testing.T) {
+func TestSetPrimaryValue(t *testing.T) {
 	people := People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{
 			{"Bob", ""},
 			{"Bob 1", ""},
 			{"Bob 2", ""},
-			{"popular", ""}}, Emails: []string{"Bob@google.com"}},
-		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}},
-			Emails: []string{"alice@google.com", "popular@google.com"}},
-		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"}},
+			{"popular", ""}},
+			Emails: []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}, {"Alice 1", ""}},
+			Emails: []string{"alice@google.com", "al@google.com"}},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
+			Emails: []string{"email@google.com"}},
 	}
-	nameFreqs := map[string]int{
-		"Bob":     3,
-		"Bob 1":   1,
-		"Bob 2":   1,
-		"popular": 5,
-		"Alice":   4,
-		"admin":   3,
+	emailFreqs := map[string]*Frequency{
+		"Bob@google.com":   {5, 8},
+		"bobby@google.com": {2, 4},
+		"12345@gmail.com":  {1, 1},
+		"email@google.com": {2, 4},
+		"alice@google.com": {1, 5},
+		"al@google.com":    {3, 3},
+		"admin@google.com": {6, 6},
 	}
 	expected := People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{
 			{"Bob", ""},
 			{"Bob 1", ""},
 			{"Bob 2", ""},
-			{"popular", ""}}, Emails: []string{"Bob@google.com"}, PrimaryName: "popular"},
-		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}},
-			Emails: []string{"alice@google.com", "popular@google.com"}, PrimaryName: "Alice"},
-		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"},
-			PrimaryName: "popular"},
+			{"popular", ""}},
+			Emails:       []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"},
+			PrimaryEmail: "Bob@google.com"},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}, {"Alice 1", ""}},
+			Emails:       []string{"alice@google.com", "al@google.com"},
+			PrimaryEmail: "al@google.com"},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
+			Emails:       []string{"email@google.com"},
+			PrimaryEmail: "email@google.com"},
 	}
-	SetPrimaryName(people, nameFreqs)
+	setPrimaryValue(people, emailFreqs, func(p *Person) []string { return p.Emails },
+		func(p *Person, email string) { p.PrimaryEmail = email }, 2)
 	require.Equal(t, expected, people)
 }
 
-func TestSetPrimaryEmail(t *testing.T) {
+func TestSetPrimaryValues(t *testing.T) {
 	people := People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{
 			{"Bob", ""},
 			{"Bob 1", ""},
 			{"Bob 2", ""},
-			{"popular", ""}}, Emails: []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"}},
-		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}},
+			{"popular", ""}},
+			Emails: []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"}},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}, {"Alice 1", ""}},
 			Emails: []string{"alice@google.com", "al@google.com"}},
-		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"}},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
+			Emails: []string{"email@google.com"}},
 	}
-	emailFreqs := map[string]int{
-		"Bob@google.com":   5,
-		"bobby@google.com": 2,
-		"12345@gmail.com":  1,
-		"email@google.com": 2,
-		"alice@google.com": 4,
-		"al@google.com":    1,
-		"admin@google.com": 6,
+	nameFreqs := map[string]*Frequency{
+		"Bob":     {5, 10},
+		"Bob 1":   {1, 3},
+		"Bob 2":   {1, 1},
+		"popular": {4, 20},
+		"Alice":   {3, 4},
+		"Alice 1": {1, 5},
+		"admin":   {3, 5},
+	}
+	emailFreqs := map[string]*Frequency{
+		"Bob@google.com":   {5, 8},
+		"bobby@google.com": {2, 4},
+		"12345@gmail.com":  {1, 1},
+		"email@google.com": {2, 4},
+		"alice@google.com": {1, 5},
+		"al@google.com":    {3, 3},
+		"admin@google.com": {6, 6},
 	}
 	expected := People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{
 			{"Bob", ""},
 			{"Bob 1", ""},
 			{"Bob 2", ""},
-			{"popular", ""}}, Emails: []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"},
-			PrimaryEmail: "Bob@google.com"},
-		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}},
-			Emails: []string{"alice@google.com", "al@google.com"}, PrimaryEmail: "alice@google.com"},
-		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"},
-			PrimaryEmail: "email@google.com"},
+			{"popular", ""}},
+			Emails:      []string{"Bob@google.com", "bobby@google.com", "12345@gmail.com"},
+			PrimaryName: "Bob", PrimaryEmail: "Bob@google.com"},
+		3: {ID: 3, NamesWithRepos: []NameWithRepo{{"Alice", ""}, {"Alice 1", ""}},
+			Emails:      []string{"alice@google.com", "al@google.com"},
+			PrimaryName: "Alice 1", PrimaryEmail: "alice@google.com"},
+		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}},
+			Emails:      []string{"email@google.com"},
+			PrimaryName: "popular", PrimaryEmail: "email@google.com"},
 	}
-	SetPrimaryEmail(people, emailFreqs)
+	SetPrimaryValues(people, nameFreqs, emailFreqs, 5)
 	require.Equal(t, expected, people)
 }
