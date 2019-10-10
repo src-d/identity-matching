@@ -461,7 +461,7 @@ func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err e
 }
 
 func readSignaturesFromDatabase(ctx context.Context, conn string) ([]signatureWithRepo, error) {
-	db, err := sql.Open("mysql", conn)
+	db, err := sql.Open("mysql", conn + "?parseTime=true")
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +482,7 @@ func readSignaturesFromDatabase(ctx context.Context, conn string) ([]signatureWi
 		i++
 		var repo, name, email string
 		var time time.Time
-		if err := rows.Scan(&repo, &name, &email, time); err != nil {
+		if err := rows.Scan(&repo, &name, &email, &time); err != nil {
 			return nil, err
 		}
 		result = append(result, signatureWithRepo{repo, name, email, time})

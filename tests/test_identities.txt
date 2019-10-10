@@ -1,6 +1,6 @@
- index | id | primary_name | external_id_provider | external_id 
--------+----+--------------+----------------------+-------------
-     0 |  1 | bob          |                      | 
-     1 |  3 | alice        |                      | 
+ index | id | primary_name |  primary_email   | external_id_provider | external_id
+-------+----+--------------+------------------+----------------------+-------------
+     0 |  1 | bob          | bob@google.com   |                      |
+     1 |  3 | alice        | alice@google.com |                      |
 (2 rows)
 
