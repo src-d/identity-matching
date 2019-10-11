@@ -49,9 +49,6 @@ install-dev-deps:
 	pip3 install --user pycodestyle==2.5.0
 	go get -v golang.org/x/lint/golint github.com/mjibson/esc golang.org/x/tools/cmd/goimports
 
-docker-build:
-	docker build -t srcd/identity_matching .
-
 docker-test: docker-build
 	docker-compose up -d
 	while ! docker exec im_gitbase sh -c 'mysql -u root --password="" < /tests/test_commits.sql'; do sleep 1; done
