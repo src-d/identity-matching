@@ -1,10 +1,14 @@
-from typing import Iterable, Mapping
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+from typing import Mapping
 
-from modelforge import Model, merge_strings, register_model, split_strings
+from modelforge import Model, register_model
 
 from sourced.ml.core.models.license import DEFAULT_LICENSE
 
 import xgboost
+
+import youtokentome
 
 
 @register_model
@@ -15,10 +19,11 @@ class BotDetection(Model):
     LICENSE = DEFAULT_LICENSE
 
     def construct(self, booster: "xgboost.core.Booster", params: Mapping[str, int],
-                  bpe_tokens: Iterable[str]):
+                  bpe_model_path: str):
         self._booster = booster
         self._params = params
-        self._bpe_tokens = bpe_tokens
+        self._bpe_model_path = bpe_model_path
+        self._bpe_model = youtokentome.BPE(bpe_model_path)
         return self
 
     @property
@@ -31,26 +36,26 @@ class BotDetection(Model):
     @property
     def params(self):
         """
-        dict with the parameters used to train the model.
+        Returns a dict with the parameters used to train the model.
         """
         return self._params
 
     @property
-    def bpe_tokens(self):
+    def bpe_model(self):
         """
-        List with the tokens composing the BPE model.
-        The i-th token in the list corresponds to i-th token of the model.
+        Returns the BPE model.
         """
-        return self._bpe_tokens
+        return self._bpe_model
 
     def _generate_tree(self):
         return {"booster": bytes(self.booster.save_raw()),
                 "params": self.params,
-                "bpe_tokens": merge_strings(self.bpe_tokens)}
+                "bpe_model": Path(self._bpe_model_path).read_text(encoding="utf8")}
 
     def _load_tree(self, tree: dict):
         booster = xgboost.Booster()
         booster.load_model(bytearray(tree["booster"]))
-        self.construct(booster=booster,
-                       params=tree["params"],
-                       bpe_tokens=split_strings(tree["bpe_tokens"]))
+        with NamedTemporaryFile(mode="w") as f:
+            f.write(tree["bpe_model"])
+            f.seek(0)
+            self.construct(booster=booster, params=tree["params"], bpe_model_path=f.name)
