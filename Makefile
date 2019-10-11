@@ -50,7 +50,7 @@ install-dev-deps:
 	go get -v golang.org/x/lint/golint github.com/mjibson/esc golang.org/x/tools/cmd/goimports
 
 docker-build:
-	docker build -t identity_matching .
+	docker build -t srcd/identity_matching .
 
 docker-test: docker-build
 	docker-compose up -d
@@ -73,7 +73,7 @@ docker-test: docker-build
     -e IDENTITY_MATCHING_MAX_IDENTITIES="20" \
     -e IDENTITY_MATCHING_MONTHS="12" \
     -e IDENTITY_MATCHING_MIN_COUNT="5" \
-	identity_matching; do sleep 1; done
+	srcd/identity_matching; do sleep 1; done
 	docker exec -it im_postgres psql -U superset -c "SELECT * FROM identities ORDER BY id" > identities.txt
 	docker exec -it im_postgres psql -U superset -c "SELECT * FROM aliases ORDER BY id, name, repo" > aliases.txt
 	diff identities.txt tests/test_identities.txt && rm identities.txt
