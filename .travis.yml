@@ -23,7 +23,6 @@ script:
 stages:
   - style
   - test
-  - docker-test
   - name: deploy
     # require any tag name
     if: tag =~ .*
@@ -58,11 +57,11 @@ matrix:
         - python3 -m unittest discover ./parquet2sql
       after_script:
         - docker rm -f postgres
-    - stage: docker-test
+    - stage: test
       go: 1.13.x
       install: skip
       script:
-        - make docker-test
+        - make test
     - stage: deploy
       go: 1.13.x
       install: skip
