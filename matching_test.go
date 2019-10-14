@@ -267,6 +267,14 @@ func (m TestMatcher) MatchByEmail(ctx context.Context, email string) (user, name
 	return usernames[email], "", nil
 }
 
+func (m TestMatcher) SupportsMatchingByCommit() bool {
+	return false
+}
+
+func (m TestMatcher) MatchByCommit(ctx context.Context, email, repo, commit string) (user, name string, err error) {
+	return "", "", nil
+}
+
 func TestReducePeopleSameNameDifferentExternalIds(t *testing.T) {
 	var people = People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob@google.com"}},

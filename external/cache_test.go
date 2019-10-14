@@ -5,6 +5,7 @@ package external
 import (
 	"context"
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -31,9 +32,9 @@ func TestNewCachedMatcher(t *testing.T) {
 	_, err := cache.Write([]byte("email,user,name,match"))
 	require.NoError(t, err)
 	cachedMatcher, err := NewCachedMatcher(matcher, cache.Name())
-	scache := safeCache{
+	scache := safeUserCache{
 		cache: make(map[string]UserName), cachePath: cache.Name(), lock: sync.RWMutex{}}
-	expectedCachedMatcher := CachedMatcher{matcher: matcher, cache: scache}
+	expectedCachedMatcher := CachedEmailMatcher{matcher: matcher, cache: scache}
 	require.NoError(t, err)
 	require.Equal(t, expectedCachedMatcher, cachedMatcher)
 }
@@ -66,10 +67,6 @@ func TestMatchByEmailAndDump(t *testing.T) {
 type TestNoMatchMatcher struct {
 }
 
-func NewTestNoMatchMatcher(apiURL, token string) (Matcher, error) {
-	return TestNoMatchMatcher{}, nil
-}
-
 var ErrTest = errors.New("API error")
 
 // MatchByEmail returns the latest GitHub user with the given email.
@@ -80,8 +77,17 @@ func (m TestNoMatchMatcher) MatchByEmail(ctx context.Context, email string) (use
 	return "", "", ErrTest
 }
 
+func (m TestNoMatchMatcher) SupportsMatchingByCommit() bool {
+	return false
+}
+
+func (m TestNoMatchMatcher) MatchByCommit(
+	ctx context.Context, email, repo, commit string) (user, name string, err error) {
+	return "", "", nil
+}
+
 func TestMatchCacheOnly(t *testing.T) {
-	matcher, _ := NewTestNoMatchMatcher("", "")
+	matcher := TestNoMatchMatcher{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cache, cleanup := tempFile(t, "*.csv")
@@ -131,4 +137,30 @@ func TestMatchCacheOnly(t *testing.T) {
 	}
 
 	require.Equal(t, expectedCacheContent, cacheContentMap)
+}
+
+func TestMatchCacheAppend(t *testing.T) {
+	req := require.New(t)
+	cache, cleanup := tempFile(t, "*.csv")
+	defer cleanup()
+	matcher := safeUserCache{
+		cache: make(map[string]UserName), cachePath: cache.Name(), lock: sync.RWMutex{}}
+	_, err := cache.Write([]byte(
+		"email,user,name,match\n" +
+			"mcuadros@gmail.com,mcuadros,Máximo Cuadros,1\n" +
+			"mcuadros-clone@gmail.com,,,0\n"))
+	cache.Sync()
+	req.NoError(err)
+	matcher.AddUserToCache("mcuadros@gmail.com", "mcuadros", "Máximo Cuadros", true)
+	matcher.AddUserToCache("mcuadros-clone@gmail.com", "mcuadros", "Máximo Cuadros", true)
+	matcher.AddUserToCache("vadim@sourced.tech", "vmarkovtsev", "Vadim Markovtsev", true)
+	req.NoError(matcher.DumpOnDisk())
+	cache.Seek(0, io.SeekStart)
+	txt, _ := ioutil.ReadAll(cache)
+	req.Equal(`email,user,name,match
+mcuadros@gmail.com,mcuadros,Máximo Cuadros,1
+mcuadros-clone@gmail.com,,,0
+mcuadros-clone@gmail.com,mcuadros,Máximo Cuadros,1
+vadim@sourced.tech,vmarkovtsev,Vadim Markovtsev,1
+`, string(txt))
 }

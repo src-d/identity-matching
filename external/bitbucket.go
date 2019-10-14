@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/wbrefvem/go-bitbucket"
@@ -53,4 +54,15 @@ func (m BitBucketMatcher) MatchByEmail(ctx context.Context, email string) (user,
 	case <-ctx.Done():
 		return "", "", context.Canceled
 	}
+}
+
+// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
+func (m BitBucketMatcher) SupportsMatchingByCommit() bool {
+	return false
+}
+
+// MatchByCommit queries the identity of a given email address in a particular commit context.
+func (m BitBucketMatcher) MatchByCommit(
+	ctx context.Context, email, repo, commit string) (user, name string, err error) {
+	return "", "", errors.New("not implemented")
 }

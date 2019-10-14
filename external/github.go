@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -146,6 +147,17 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 	case <-ctx.Done():
 		return "", "", context.Canceled
 	}
+}
+
+// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
+func (m GitHubMatcher) SupportsMatchingByCommit() bool {
+	return false
+}
+
+// MatchByCommit queries the identity of a given email address in a particular commit context.
+func (m GitHubMatcher) MatchByCommit(
+	ctx context.Context, email, repo, commit string) (user, name string, err error) {
+	return "", "", errors.New("not implemented")
 }
 
 func isNoReplyEmail(email string) bool {
