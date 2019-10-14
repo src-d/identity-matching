@@ -26,41 +26,43 @@ func tempFile(t *testing.T, pattern string) (*os.File, func()) {
 }
 
 func TestNewCachedMatcher(t *testing.T) {
+	req := require.New(t)
 	matcher, _ := NewGitHubMatcher("", githubTestToken)
 	cache, cleanup := tempFile(t, "*.csv")
 	defer cleanup()
 	_, err := cache.Write([]byte("email,user,name,match"))
-	require.NoError(t, err)
+	req.NoError(err)
 	cachedMatcher, err := NewCachedMatcher(matcher, cache.Name())
 	scache := safeUserCache{
 		cache: make(map[string]UserName), cachePath: cache.Name(), lock: sync.RWMutex{}}
-	expectedCachedMatcher := CachedEmailMatcher{matcher: matcher, cache: scache}
-	require.NoError(t, err)
-	require.Equal(t, expectedCachedMatcher, cachedMatcher)
+	expectedCachedMatcher := CachedMatcher{matcher: matcher, cache: scache}
+	req.NoError(err)
+	req.Equal(expectedCachedMatcher, cachedMatcher)
 }
 
 func TestMatchByEmailAndDump(t *testing.T) {
+	req := require.New(t)
 	matcher, _ := NewGitHubMatcher("", githubTestToken)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cache, cleanup := tempFile(t, "*.csv")
 	defer cleanup()
 	_, err := cache.Write([]byte("email,user,name,match"))
-	require.NoError(t, err)
+	req.NoError(err)
 	cachedMatcher, err := NewCachedMatcher(matcher, cache.Name())
-	require.NoError(t, err)
+	req.NoError(err)
 
 	user, name, err := cachedMatcher.MatchByEmail(ctx, "mcuadros@gmail.com")
-	require.Equal(t, "mcuadros", user)
-	require.Equal(t, "Máximo Cuadros", name)
-	require.NoError(t, err)
+	req.Equal("mcuadros", user)
+	req.Equal("Máximo Cuadros", name)
+	req.NoError(err)
 
 	err = cachedMatcher.DumpCache()
-	require.NoError(t, err)
+	req.NoError(err)
 	cacheContent, err := ioutil.ReadFile(cache.Name())
-	require.NoError(t, err)
+	req.NoError(err)
 	expectedCacheContent := "email,user,name,match\nmcuadros@gmail.com,mcuadros,Máximo Cuadros,1\n"
-	require.Equal(t, expectedCacheContent, string(cacheContent))
+	req.Equal(expectedCacheContent, string(cacheContent))
 }
 
 // TestNoMatchMatcher does not match any emails.
@@ -78,15 +80,19 @@ func (m TestNoMatchMatcher) MatchByEmail(ctx context.Context, email string) (use
 }
 
 func (m TestNoMatchMatcher) SupportsMatchingByCommit() bool {
-	return false
+	return true
 }
 
 func (m TestNoMatchMatcher) MatchByCommit(
 	ctx context.Context, email, repo, commit string) (user, name string, err error) {
-	return "", "", nil
+	if email == "new@gmail.com" {
+		return "new_user", "new_name", nil
+	}
+	return "", "", ErrTest
 }
 
 func TestMatchCacheOnly(t *testing.T) {
+	req := require.New(t)
 	matcher := TestNoMatchMatcher{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -96,34 +102,34 @@ func TestMatchCacheOnly(t *testing.T) {
 		"email,user,name,match\n" +
 			"mcuadros@gmail.com,mcuadros,Máximo Cuadros,1\n" +
 			"mcuadros-clone@gmail.com,,,0\n"))
-	require.NoError(t, err)
+	req.NoError(err)
 	cachedMatcher, err := NewCachedMatcher(matcher, cache.Name())
-	require.NoError(t, err)
+	req.NoError(err)
 
 	user, name, err := cachedMatcher.MatchByEmail(ctx, "mcuadros@gmail.com")
-	require.Equal(t, "mcuadros", user)
-	require.Equal(t, "Máximo Cuadros", name)
-	require.NoError(t, err)
+	req.Equal("mcuadros", user)
+	req.Equal("Máximo Cuadros", name)
+	req.NoError(err)
 
 	user, name, err = cachedMatcher.MatchByEmail(ctx, "mcuadros-clone@gmail.com")
-	require.Equal(t, "", user)
-	require.Equal(t, "", name)
-	require.Equal(t, ErrNoMatches, err)
+	req.Equal("", user)
+	req.Equal("", name)
+	req.Equal(ErrNoMatches, err)
 
 	user, name, err = cachedMatcher.MatchByEmail(ctx, "errored@gmail.com")
-	require.Equal(t, "", user)
-	require.Equal(t, "", name)
-	require.Equal(t, ErrTest, err)
+	req.Equal("", user)
+	req.Equal("", name)
+	req.Equal(ErrTest, err)
 
 	user, name, err = cachedMatcher.MatchByEmail(ctx, "new@gmail.com")
-	require.Equal(t, "new_user", user)
-	require.Equal(t, "new_name", name)
-	require.NoError(t, err)
+	req.Equal("new_user", user)
+	req.Equal("new_name", name)
+	req.NoError(err)
 
 	err = cachedMatcher.DumpCache()
-	require.NoError(t, err)
+	req.NoError(err)
 	cacheContent, err := ioutil.ReadFile(cache.Name())
-	require.NoError(t, err)
+	req.NoError(err)
 	expectedCacheContent := map[string]struct{}{
 		"email,user,name,match":                        {},
 		"mcuadros@gmail.com,mcuadros,Máximo Cuadros,1": {},
@@ -136,7 +142,7 @@ func TestMatchCacheOnly(t *testing.T) {
 		cacheContentMap[line] = struct{}{}
 	}
 
-	require.Equal(t, expectedCacheContent, cacheContentMap)
+	req.Equal(expectedCacheContent, cacheContentMap)
 }
 
 func TestMatchCacheAppend(t *testing.T) {
@@ -163,4 +169,41 @@ mcuadros-clone@gmail.com,,,0
 mcuadros-clone@gmail.com,mcuadros,Máximo Cuadros,1
 vadim@sourced.tech,vmarkovtsev,Vadim Markovtsev,1
 `, string(txt))
+}
+
+func TestMatchCacheCommit(t *testing.T) {
+	req := require.New(t)
+	matcher := TestNoMatchMatcher{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cache, cleanup := tempFile(t, "*.csv")
+	defer cleanup()
+	_, err := cache.Write([]byte(
+		"email,user,name,match\n" +
+			"mcuadros@gmail.com,mcuadros,Máximo Cuadros,1\n" +
+			"mcuadros-clone@gmail.com,,,0\n"))
+	req.NoError(err)
+	cachedMatcher, err := NewCachedMatcher(matcher, cache.Name())
+	req.NoError(err)
+	req.True(cachedMatcher.SupportsMatchingByCommit())
+
+	user, name, err := cachedMatcher.MatchByCommit(ctx, "mcuadros@gmail.com", "repo", "commit_hash")
+	req.Equal("mcuadros", user)
+	req.Equal("Máximo Cuadros", name)
+	req.NoError(err)
+
+	user, name, err = cachedMatcher.MatchByCommit(ctx, "mcuadros-clone@gmail.com", "repo", "commit_hash")
+	req.Equal("", user)
+	req.Equal("", name)
+	req.Equal(ErrNoMatches, err)
+
+	user, name, err = cachedMatcher.MatchByCommit(ctx, "errored@gmail.com", "repo", "commit_hash")
+	req.Equal("", user)
+	req.Equal("", name)
+	req.Equal(ErrTest, err)
+
+	user, name, err = cachedMatcher.MatchByCommit(ctx, "new@gmail.com", "repo", "commit_hash")
+	req.Equal("new_user", user)
+	req.Equal("new_name", name)
+	req.NoError(err)
 }
