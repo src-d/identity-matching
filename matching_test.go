@@ -14,6 +14,7 @@ import (
 var githubTestToken = os.Getenv("GITHUB_TEST_TOKEN")
 
 func TestReducePeople(t *testing.T) {
+	commit := &Commit{"xxx", "repo"}
 	var people = People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"Bob 1", ""}}, Emails: []string{"Bob@google.com"}},
 		2: {ID: 2, NamesWithRepos: []NameWithRepo{{"Bob 2", ""}}, Emails: []string{"Bob@google.com"}},
@@ -22,6 +23,9 @@ func TestReducePeople(t *testing.T) {
 		5: {ID: 5, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"Bob@google.com"}},
 		6: {ID: 6, NamesWithRepos: []NameWithRepo{{"popular", ""}}, Emails: []string{"email@google.com"}},
 		7: {ID: 7, NamesWithRepos: []NameWithRepo{{"Alice", ""}}, Emails: []string{"popular@google.com"}},
+	}
+	for _, p := range people {
+		p.SampleCommit = commit
 	}
 
 	var reducedPeople = People{
