@@ -28,6 +28,7 @@ type signatureWithRepo struct {
 	repo  string
 	name  string
 	email string
+	hash  string
 	time  time.Time
 }
 
@@ -37,14 +38,22 @@ type NameWithRepo struct {
 	Repo string
 }
 
+// Commit represent a commit in a specific repository wit ha specific hash.
+type Commit struct {
+	Hash string
+	Repo string
+}
+
 // Person is a single individual that can have multiple names and emails.
 type Person struct {
 	ID             int64
 	NamesWithRepos []NameWithRepo
 	Emails         []string
-	ExternalID     string
-	PrimaryName    string
-	PrimaryEmail   string
+	// SampleCommit in an example Git commit which mentions this identity. May be nil.
+	SampleCommit *Commit
+	ExternalID   string
+	PrimaryName  string
+	PrimaryEmail string
 }
 
 func uniqueNamesWithRepo(names []NameWithRepo) []NameWithRepo {
@@ -126,10 +135,10 @@ func newPeople(commits []signatureWithRepo, blacklist Blacklist) (People, error)
 			ID:             id,
 			NamesWithRepos: []NameWithRepo{nameWithRepo},
 			Emails:         []string{email},
+			SampleCommit:   &Commit{p.hash, p.repo},
 		}
 	}
 	reporter.Commit("people after filtering", len(result))
-
 	return result, nil
 }
 
@@ -197,7 +206,7 @@ func readFromParquet(pathAliases string) (People, string, error) {
 	var externalIDProvider, curExternalIDProvider string
 	for _, person := range parquetPersonAliases {
 		if _, ok := people[person.ID]; !ok {
-			people[person.ID] = &Person{person.ID, nil, nil, "", "", ""}
+			people[person.ID] = &Person{person.ID, nil, nil, nil, "", "", ""}
 		}
 		if person.Email != "" {
 			people[person.ID].Emails = append(people[person.ID].Emails, person.Email)
@@ -312,6 +321,7 @@ func (p People) Merge(ids ...int64) (int64, error) {
 	}
 	p0.Emails = unique(p0.Emails)
 	p0.NamesWithRepos = uniqueNamesWithRepo(p0.NamesWithRepos)
+	p0.SampleCommit = nil
 
 	return ids[0], nil
 }
@@ -390,7 +400,7 @@ func getStats(commits []signatureWithRepo, recentStartTime time.Time) (
 }
 
 const findPeopleSQL = `
-SELECT repository_id, commit_author_name, commit_author_email, commit_author_when
+SELECT repository_id, commit_author_name, commit_author_email, commit_hash, commit_author_when
 FROM commits;
 `
 
@@ -421,33 +431,40 @@ func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err e
 			return nil, err
 		}
 		if len(header) == 0 {
-			if len(record) != 3 {
-				err = fmt.Errorf("invalid CSV file: should have 3 columns")
-				return nil, err
+			if len(record) != 5 {
+				return nil, fmt.Errorf(
+					"invalid CSV file: should have 5 columns instead of %d", len(record))
 			}
 			for index, name := range record {
 				header[name] = index
 			}
 		} else {
 			if len(record) != len(header) {
-				err = fmt.Errorf("invalid CSV record: %s", strings.Join(record, ","))
-				return nil, err
+				return nil, fmt.Errorf("invalid CSV record: %s", strings.Join(record, ","))
 			}
 
 			for key := range header {
-				normValue, _, err := removeDiacritical(record[header[key]])
-				if err != nil {
-					return nil, err
+				if key != "time" {
+					normValue, _, err := removeDiacritical(record[header[key]])
+					if err != nil {
+						return nil, err
+					}
+					record[header[key]] = strings.TrimSpace(normalizeSpaces(strings.ToLower(normValue)))
+				} else {
+					record[header[key]] = strings.TrimSpace(record[header[key]])
 				}
-				record[header[key]] = strings.TrimSpace(normalizeSpaces(strings.ToLower(normValue)))
 			}
 
 			person := signatureWithRepo{
 				repo:  record[header["repo"]],
 				name:  record[header["name"]],
-				email: record[header["email"]]}
+				email: record[header["email"]],
+				hash:  record[header["hash"]],
+			}
 			person.time, err = time.Parse(time.RFC3339, record[header["time"]])
-			if err != nil || person.repo == "" || person.email == "" || person.name == "" {
+			if err != nil || person.repo == "" || person.email == "" || person.name == "" ||
+				person.hash == "" {
+				logrus.Warnf("invalid cache item: %v: %v", record, err)
 				continue
 			}
 			commits = append(commits, person)
@@ -480,18 +497,18 @@ func readSignaturesFromDatabase(ctx context.Context, conn string) ([]signatureWi
 	for rows.Next() {
 		spin.Suffix = fmt.Sprintf(" %d", i+1)
 		i++
-		var repo, name, email string
+		var repo, name, email, hash string
 		var time time.Time
-		if err := rows.Scan(&repo, &name, &email, &time); err != nil {
+		if err := rows.Scan(&repo, &name, &email, &hash, &time); err != nil {
 			return nil, err
 		}
-		result = append(result, signatureWithRepo{repo, name, email, time})
+		result = append(result, signatureWithRepo{repo, name, email, hash, time})
 	}
 
 	return result, rows.Err()
 }
 
-func storePeopleOnDisk(filePath string, result []signatureWithRepo) (err error) {
+func storeSignaturesOnDisk(filePath string, result []signatureWithRepo) (err error) {
 	var file *os.File
 	file, err = os.Create(filePath)
 	if err != nil {
@@ -511,12 +528,12 @@ func storePeopleOnDisk(filePath string, result []signatureWithRepo) (err error) 
 			err = writer.Error()
 		}
 	}()
-	err = writer.Write([]string{"repo", "name", "email", "time"})
+	err = writer.Write([]string{"repo", "name", "email", "hash", "time"})
 	if err != nil {
 		return
 	}
 	for _, p := range result {
-		err = writer.Write([]string{p.repo, p.name, p.email, p.time.String()})
+		err = writer.Write([]string{p.repo, p.name, p.email, p.hash, p.time.Format(time.RFC3339)})
 		if err != nil {
 			return
 		}
@@ -526,20 +543,21 @@ func storePeopleOnDisk(filePath string, result []signatureWithRepo) (err error) 
 
 func findSignatures(ctx context.Context, connStr string, path string) ([]signatureWithRepo, error) {
 	if _, err := os.Stat(path); err == nil {
+		logrus.Printf("reading signatures from the cache: %s", path)
 		return readSignaturesFromDisk(path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 
-	logrus.Printf("not cached in %s, loading from the database", path)
+	logrus.Printf("signatures are not cached in %s, loading them from the database", path)
 	result, err := readSignaturesFromDatabase(ctx, connStr)
 	if err != nil {
 		return nil, err
 	}
 
 	if path != "" {
-		logrus.Printf("caching the result to %s", path)
-		if err := storePeopleOnDisk(path, result); err != nil {
+		logrus.Printf("writing the signatures cache to %s", path)
+		if err := storeSignaturesOnDisk(path, result); err != nil {
 			return nil, err
 		}
 	}
