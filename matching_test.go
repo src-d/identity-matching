@@ -258,21 +258,21 @@ func TestReducePeopleBothMatchingDifferentExternalIdsNoMerge(t *testing.T) {
 type TestMatcher struct {
 }
 
-func (m TestMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+func (m TestMatcher) MatchByEmail(ctx context.Context, email string) (user string, err error) {
 	usernames := map[string]string{
 		"Bob@google.com":   "bob_username",
 		"Bob2@google.com":  "not_bob_username",
 		"alice@google.com": "alice_username",
 	}
-	return usernames[email], "", nil
+	return usernames[email], nil
 }
 
 func (m TestMatcher) SupportsMatchingByCommit() bool {
 	return false
 }
 
-func (m TestMatcher) MatchByCommit(ctx context.Context, email, repo, commit string) (user, name string, err error) {
-	return "", "", nil
+func (m TestMatcher) MatchByCommit(ctx context.Context, email, repo, commit string) (user string, err error) {
+	return "", nil
 }
 
 func TestReducePeopleSameNameDifferentExternalIds(t *testing.T) {

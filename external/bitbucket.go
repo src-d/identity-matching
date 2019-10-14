@@ -30,7 +30,7 @@ func NewBitBucketMatcher(apiURL, token string) (Matcher, error) {
 }
 
 // MatchByEmail returns the latest BitBucket user with the given email.
-func (m BitBucketMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+func (m BitBucketMatcher) MatchByEmail(ctx context.Context, email string) (user string, err error) {
 	finished := make(chan struct{})
 	go func() {
 		defer func() { finished <- struct{}{} }()
@@ -46,13 +46,13 @@ func (m BitBucketMatcher) MatchByEmail(ctx context.Context, email string) (user,
 			return
 		}
 		user = u.AccountId
-		name = u.DisplayName
+		// name = u.DisplayName
 	}()
 	select {
 	case <-finished:
 		return
 	case <-ctx.Done():
-		return "", "", context.Canceled
+		return "", context.Canceled
 	}
 }
 
@@ -63,6 +63,6 @@ func (m BitBucketMatcher) SupportsMatchingByCommit() bool {
 
 // MatchByCommit queries the identity of a given email address in a particular commit context.
 func (m BitBucketMatcher) MatchByCommit(
-	ctx context.Context, email, repo, commit string) (user, name string, err error) {
-	return "", "", errors.New("not implemented")
+	ctx context.Context, email, repo, commit string) (user string, err error) {
+	return "", errors.New("not implemented")
 }
