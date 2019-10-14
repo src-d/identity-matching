@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"errors"
 
 	"github.com/sirupsen/logrus"
 	"github.com/xanzy/go-gitlab"
@@ -56,4 +57,15 @@ func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 	case <-ctx.Done():
 		return "", "", context.Canceled
 	}
+}
+
+// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
+func (m GitLabMatcher) SupportsMatchingByCommit() bool {
+	return false
+}
+
+// MatchByCommit queries the identity of a given email address in a particular commit context.
+func (m GitLabMatcher) MatchByCommit(
+	ctx context.Context, email, repo, commit string) (user, name string, err error) {
+	return "", "", errors.New("not implemented")
 }

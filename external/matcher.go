@@ -5,9 +5,14 @@ import (
 	"errors"
 )
 
-// Matcher defines the external matching service API, currently only by email.
+// Matcher defines the external matching service API, either by email or by commit.
 type Matcher interface {
+	// MatchByEmail queries the identity of a given email address.
 	MatchByEmail(ctx context.Context, email string) (user, name string, err error)
+	// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
+	SupportsMatchingByCommit() bool
+	// MatchByCommit queries the identity of a given email address in a particular commit context.
+	MatchByCommit(ctx context.Context, email, repo, commit string) (user, name string, err error)
 }
 
 // MatcherConstructor is the Matcher constructor function type.
