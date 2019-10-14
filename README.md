@@ -1,6 +1,6 @@
 # Identity Matching source{d} Extension
 
-[![Travis build status](https://travis-ci.com/src-d/identity-matching.svg?token=WzaxY77NzbmrefwxuhAh&branch=master)](https://travis-ci.com/src-d/identity-matching) [![Code coverage](https://codecov.io/github/src-d/identity-matching/coverage.svg)](https://codecov.io/gh/src-d/identity-matching) [![Go Report Card](https://goreportcard.com/badge/github.com/src-d/identity-matching?branch=master)](https://goreportcard.com/report/github.com/src-d/identity-matching) [![GPL 3.0 license](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
+[![Travis build status](https://travis-ci.com/src-d/identity-matching.svg?token=WzaxY77NzbmrefwxuhAh&branch=master)](https://travis-ci.com/src-d/identity-matching) [![Code coverage](https://codecov.io/github/src-d/identity-matching/coverage.svg)](https://codecov.io/gh/src-d/identity-matching) [![Docker pulls](https://img.shields.io/docker/pulls/srcd/identity_matching.svg)](https://hub.docker.com/r/srcd/identity_matching) [![Go Report Card](https://goreportcard.com/badge/github.com/src-d/identity-matching?branch=master)](https://goreportcard.com/report/github.com/src-d/identity-matching) [![GPL 3.0 license](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
 
 Match different identities of the same person using 🤖. Extension for [source{d}](https://github.com/src-d/sourced-ce).
 
