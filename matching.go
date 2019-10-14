@@ -36,7 +36,7 @@ func (p Int64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 // Sort is a convenience method.
 func (p Int64Slice) Sort() { sort.Sort(p) }
 
-// addEdgesWithMatcher adds edges by the groundtruth fetched with external matcher.
+// addEdgesWithMatcher adds edges by the ground truth from an external matcher.
 func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	matcher external.Matcher) (map[string]struct{}, error) {
 	unprocessedEmails := map[string]struct{}{}
@@ -49,7 +49,12 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	var err error
 	for index, person := range people {
 		for _, email := range person.Emails {
-			username, err = matcher.MatchByEmail(ctx, email)
+			if matcher.SupportsMatchingByCommit() && person.SampleCommit != nil {
+				username, err = matcher.MatchByCommit(
+					ctx, email, person.SampleCommit.Repo, person.SampleCommit.Hash)
+			} else {
+				username, err = matcher.MatchByEmail(ctx, email)
+			}
 			if err != nil {
 				if err == external.ErrNoMatches {
 					logrus.Warnf("no matches for person %s", person.String())
