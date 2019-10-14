@@ -28,7 +28,7 @@ func NewGitLabMatcher(apiURL, token string) (Matcher, error) {
 }
 
 // MatchByEmail returns the latest GitLab user with the given email.
-func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user string, err error) {
 	finished := make(chan struct{})
 	go func() {
 		defer func() { finished <- struct{}{} }()
@@ -47,7 +47,7 @@ func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 				return
 			}
 			user = users[0].Username
-			name = users[0].Name
+			// name = users[0].Name
 			return
 		}
 	}()
@@ -55,7 +55,7 @@ func (m GitLabMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 	case <-finished:
 		return
 	case <-ctx.Done():
-		return "", "", context.Canceled
+		return "", context.Canceled
 	}
 }
 
@@ -66,6 +66,6 @@ func (m GitLabMatcher) SupportsMatchingByCommit() bool {
 
 // MatchByCommit queries the identity of a given email address in a particular commit context.
 func (m GitLabMatcher) MatchByCommit(
-	ctx context.Context, email, repo, commit string) (user, name string, err error) {
-	return "", "", errors.New("not implemented")
+	ctx context.Context, email, repo, commit string) (user string, err error) {
+	return "", errors.New("not implemented")
 }

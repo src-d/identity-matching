@@ -2,8 +2,8 @@ package external
 
 import (
 	"context"
-	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -43,60 +43,22 @@ var searchOpts = &github.SearchOptions{
 	Sort:        "joined",
 	ListOptions: github.ListOptions{PerPage: 1},
 }
+var gitHubRepoRe = regexp.MustCompile(`(.*://|^)github.com/([^/]+)/([^/]+?)(?:\.git)?$`)
+
+const (
+	responseSuccess = 0
+	responseRetry   = 1
+	responseFail    = 2
+	maxNumFailures  = 8
+)
 
 // MatchByEmail returns the latest GitHub user with the given email.
-func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user string, err error) {
 	finished := make(chan struct{})
 	go func() {
 		defer func() { finished <- struct{}{} }()
 
 		var numFailures uint64
-		const maxNumFailures = 8
-		const (
-			success = 0
-			retry   = 1
-			fail    = 2
-		)
-		check := func(response *github.Response, err error) int {
-			code := response.Response.StatusCode
-			if err == nil && code >= 200 && code < 300 {
-				return success
-			}
-
-			rateLimitHit := false
-			if val, exists := response.Response.Header["X-Ratelimit-Remaining"]; code == 403 &&
-				exists && len(val) == 1 && val[0] == "0" {
-				rateLimitHit = true
-			}
-			if rateLimitHit {
-				t, err := strconv.ParseInt(
-					response.Response.Header["X-Ratelimit-Reset"][0], 10, 64)
-				if err != nil {
-					logrus.Errorf("Bad X-Ratelimit-Reset header: %v. %s",
-						err, response.String())
-					return fail
-				}
-				resetTime := time.Unix(t, 0).Add(time.Second)
-				logrus.Warnf("rate limit was hit, waiting until %s", resetTime.String())
-				time.Sleep(resetTime.Sub(time.Now().UTC()))
-				return retry
-			}
-
-			if err != nil || code >= 500 && code < 600 || code == 408 || code == 429 {
-				sleepTime := time.Duration((1 << numFailures) * int64(time.Second))
-				logrus.Warnf("HTTP %d: %s. %s. Sleeping until %s", code, err, response.String(),
-					time.Now().UTC().Add(sleepTime))
-				time.Sleep(sleepTime)
-				numFailures++
-				if numFailures > maxNumFailures {
-					return fail
-				}
-				return retry
-			}
-			logrus.Warnf("HTTP %d: %s. %s", code, err, response.String())
-			return fail
-		}
-
 		query := email + " in:email"
 		for { // api rate limit retry loop
 			if isNoReplyEmail(email) {
@@ -105,10 +67,10 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 				var result *github.UsersSearchResult
 				var response *github.Response
 				result, response, err = m.client.Search.Users(ctx, query, searchOpts)
-				status := check(response, err)
-				if status == retry {
+				status := checkResponse(response, err, &numFailures)
+				if status == responseRetry {
 					continue
-				} else if status == fail {
+				} else if status == responseFail {
 					return
 				}
 				if len(result.Users) == 0 {
@@ -125,39 +87,109 @@ func (m GitHubMatcher) MatchByEmail(ctx context.Context, email string) (user, na
 				break
 			}
 		}
+	}()
+	select {
+	case <-finished:
+		return
+	case <-ctx.Done():
+		return "", context.Canceled
+	}
+}
 
+// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
+func (m GitHubMatcher) SupportsMatchingByCommit() bool {
+	return true
+}
+
+// MatchByCommit queries the identity of a given email address in a particular commit context.
+func (m GitHubMatcher) MatchByCommit(
+	ctx context.Context, email, repo, commit string) (user string, err error) {
+	parsedRepo := gitHubRepoRe.FindStringSubmatch(repo)
+	if len(parsedRepo) < 4 {
+		logrus.Panicf("not a GitHub repository: %s", repo)
+	}
+	if len(commit) != 40 {
+		logrus.Panicf("not a Git hash: %s", commit)
+	}
+	repoUser := parsedRepo[2]
+	repoName := parsedRepo[3]
+	finished := make(chan struct{})
+	go func() {
+		defer func() { finished <- struct{}{} }()
+
+		var numFailures uint64
 		for { // api rate limit retry loop
-			var u *github.User
-			var response *github.Response
-			u, response, err = m.client.Users.Get(ctx, user)
-			status := check(response, err)
-			if status == retry {
-				continue
-			} else if status == fail {
-				return
+			if isNoReplyEmail(email) {
+				user = userFromEmail(email)
+			} else {
+				var c *github.RepositoryCommit
+				var response *github.Response
+				c, response, err = m.client.Repositories.GetCommit(ctx, repoUser, repoName, commit)
+				status := checkResponse(response, err, &numFailures)
+				if status == responseRetry {
+					continue
+				} else if status == responseFail {
+					return
+				}
+				if c.Author != nil && c.Author.Login != nil && c.Commit.Author != nil &&
+					c.Commit.Author.Email != nil && *c.Commit.Author.Email == email {
+					user = *c.Author.Login
+				} else if c.Committer != nil && c.Committer.Login != nil && c.Commit.Committer != nil &&
+					c.Commit.Committer.Email != nil && *c.Commit.Committer.Email == email {
+					user = *c.Committer.Login
+				} else {
+					logrus.Warnf("unable to find users by commit for email: %s", email)
+					err = ErrNoMatches
+				}
+				break
 			}
-			user = u.GetLogin()
-			name = u.GetName()
-			return
 		}
 	}()
 	select {
 	case <-finished:
 		return
 	case <-ctx.Done():
-		return "", "", context.Canceled
+		return "", context.Canceled
 	}
 }
 
-// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
-func (m GitHubMatcher) SupportsMatchingByCommit() bool {
-	return false
-}
+func checkResponse(response *github.Response, err error, numFailures *uint64) int {
+	code := response.Response.StatusCode
+	if err == nil && code >= 200 && code < 300 {
+		return responseSuccess
+	}
 
-// MatchByCommit queries the identity of a given email address in a particular commit context.
-func (m GitHubMatcher) MatchByCommit(
-	ctx context.Context, email, repo, commit string) (user, name string, err error) {
-	return "", "", errors.New("not implemented")
+	rateLimitHit := false
+	if val, exists := response.Response.Header["X-Ratelimit-Remaining"]; code == 403 &&
+		exists && len(val) == 1 && val[0] == "0" {
+		rateLimitHit = true
+	}
+	if rateLimitHit {
+		t, err := strconv.ParseInt(
+			response.Response.Header["X-Ratelimit-Reset"][0], 10, 64)
+		if err != nil {
+			logrus.Errorf("Bad X-Ratelimit-Reset header: %v", err)
+			return responseFail
+		}
+		resetTime := time.Unix(t, 0).Add(time.Second)
+		logrus.Warnf("rate limit was hit, waiting until %s", resetTime.String())
+		time.Sleep(resetTime.Sub(time.Now().UTC()))
+		return responseRetry
+	}
+
+	if err != nil || code >= 500 && code < 600 || code == 408 || code == 429 {
+		sleepTime := time.Duration((1 << *numFailures) * int64(time.Second))
+		logrus.Warnf("HTTP %d: %s, sleeping until %s", code, err,
+			time.Now().UTC().Add(sleepTime))
+		time.Sleep(sleepTime)
+		*numFailures++
+		if *numFailures > maxNumFailures {
+			return responseFail
+		}
+		return responseRetry
+	}
+	logrus.Warnf("HTTP %d: %s", code, err)
+	return responseFail
 }
 
 func isNoReplyEmail(email string) bool {

@@ -13,15 +13,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// UserName represents personal name and username of a person
-type UserName struct {
+// CachedUser represents personal name and username of a person
+type CachedUser struct {
 	User    string
-	Name    string
 	Matched bool // false if there is no match from the external API
 }
 
 type safeUserCache struct {
-	cache     map[string]UserName
+	cache     map[string]CachedUser
 	lock      sync.RWMutex // mutex to make cache mapping safe for concurrent use
 	cachePath string
 }
@@ -54,7 +53,7 @@ func NewCachedMatcher(matcher Matcher, cachePath string) (*CachedMatcher, error)
 	logrus.WithFields(logrus.Fields{
 		"cachePath": cachePath,
 	}).Info("Using cache for external matching")
-	cache := safeUserCache{cache: make(map[string]UserName), cachePath: cachePath, lock: sync.RWMutex{}}
+	cache := safeUserCache{cache: make(map[string]CachedUser), cachePath: cachePath, lock: sync.RWMutex{}}
 	cachedMatcher := &CachedMatcher{matcher: matcher, cache: cache}
 	var err error
 	if PathExists(cachePath) {
@@ -79,24 +78,24 @@ func (m CachedMatcher) DumpCache() error {
 }
 
 // MatchByEmail looks in the cache first, and if there is a cache miss, forwards to the underlying Matcher.
-func (m *CachedMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+func (m *CachedMatcher) MatchByEmail(ctx context.Context, email string) (user string, err error) {
 	if username, exists := m.cache.ReadUserFromCache(email); exists {
 		if username.Matched {
-			return username.User, username.Name, nil
+			return username.User, nil
 		}
-		return "", "", ErrNoMatches
+		return "", ErrNoMatches
 	}
-	user, name, err = m.matcher.MatchByEmail(ctx, email)
+	user, err = m.matcher.MatchByEmail(ctx, email)
 	if err == nil {
-		m.cache.AddUserToCache(email, user, name, true)
+		m.cache.AddUserToCache(email, user, true)
 	}
 	if err == ErrNoMatches {
-		m.cache.AddUserToCache(email, user, name, false)
+		m.cache.AddUserToCache(email, user, false)
 	}
 	if len(m.cache.cache)%saveFreq == 0 {
 		err = m.DumpCache()
 	}
-	return user, name, err
+	return user, err
 }
 
 // SupportsMatchingByCommit acts the same as the underlying Matcher.
@@ -106,37 +105,37 @@ func (m *CachedMatcher) SupportsMatchingByCommit() bool {
 
 // MatchByCommit looks in the cache first, and if there is a cache miss, forwards to the underlying Matcher.
 func (m *CachedMatcher) MatchByCommit(
-	ctx context.Context, email, repo, commit string) (user, name string, err error) {
+	ctx context.Context, email, repo, commit string) (user string, err error) {
 	if username, exists := m.cache.ReadUserFromCache(email); exists {
 		if username.Matched {
-			return username.User, username.Name, nil
+			return username.User, nil
 		}
-		return "", "", ErrNoMatches
+		return "", ErrNoMatches
 	}
-	user, name, err = m.matcher.MatchByCommit(ctx, email, repo, commit)
+	user, err = m.matcher.MatchByCommit(ctx, email, repo, commit)
 	if err == nil {
-		m.cache.AddUserToCache(email, user, name, true)
+		m.cache.AddUserToCache(email, user, true)
 	}
 	if err == ErrNoMatches {
-		m.cache.AddUserToCache(email, user, name, false)
+		m.cache.AddUserToCache(email, user, false)
 	}
 	m.cache.lock.Lock()
 	if len(m.cache.cache)%saveFreq == 0 {
 		err = m.DumpCache()
 	}
 	m.cache.lock.Unlock()
-	return user, name, err
+	return user, err
 }
 
 // Add to cache safely
-func (m *safeUserCache) AddUserToCache(email string, user string, name string, matched bool) {
+func (m *safeUserCache) AddUserToCache(email string, user string, matched bool) {
 	m.lock.Lock()
-	m.cache[email] = UserName{user, name, matched}
+	m.cache[email] = CachedUser{user, matched}
 	m.lock.Unlock()
 }
 
 // Read from cache safely
-func (m safeUserCache) ReadUserFromCache(email string) (UserName, bool) {
+func (m safeUserCache) ReadUserFromCache(email string) (CachedUser, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 	val, exists := m.cache[email]
@@ -173,8 +172,8 @@ func (m *safeUserCache) LoadFromDisk() error {
 			return err
 		}
 		if len(header) == 0 {
-			if len(record) != 4 {
-				return fmt.Errorf("invalid CSV file: should have 4 columns")
+			if len(record) != 3 {
+				return fmt.Errorf("invalid CSV file: should have 3 columns")
 			}
 			for index, name := range record {
 				header[name] = index
@@ -183,9 +182,8 @@ func (m *safeUserCache) LoadFromDisk() error {
 			if len(record) != len(header) {
 				return fmt.Errorf("invalid CSV record: %s", strings.Join(record, ","))
 			}
-			m.cache[record[header["email"]]] = UserName{
-				record[header["user"]], record[header["name"]],
-				record[header["match"]] == csvTrue}
+			m.cache[record[header["email"]]] = CachedUser{
+				record[header["user"]], record[header["match"]] == csvTrue}
 		}
 	}
 	if err == io.EOF {
@@ -198,7 +196,7 @@ func (m *safeUserCache) LoadFromDisk() error {
 func (m safeUserCache) DumpOnDisk() error {
 	logrus.Info("Dumping CachedMatcher cache")
 	var file *os.File
-	existing := safeUserCache{cache: make(map[string]UserName), cachePath: m.cachePath, lock: m.lock}
+	existing := safeUserCache{cache: make(map[string]CachedUser), cachePath: m.cachePath, lock: m.lock}
 	flag := os.O_CREATE | os.O_WRONLY
 	if existing.LoadFromDisk() == nil && len(existing.cache) > 0 {
 		flag |= os.O_APPEND
@@ -223,7 +221,7 @@ func (m safeUserCache) DumpOnDisk() error {
 		}
 	}()
 	if len(existing.cache) == 0 {
-		err = writer.Write([]string{"email", "user", "name", "match"})
+		err = writer.Write([]string{"email", "user", "match"})
 		if err != nil {
 			return err
 		}
@@ -242,7 +240,7 @@ func (m safeUserCache) DumpOnDisk() error {
 		if username.Matched {
 			match = csvTrue
 		}
-		err = writer.Write([]string{email, username.User, username.Name, match})
+		err = writer.Write([]string{email, username.User, match})
 		if err != nil {
 			return err
 		}

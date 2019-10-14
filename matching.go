@@ -49,7 +49,7 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	var err error
 	for index, person := range people {
 		for _, email := range person.Emails {
-			username, _, err = matcher.MatchByEmail(ctx, email)
+			username, err = matcher.MatchByEmail(ctx, email)
 			if err != nil {
 				if err == external.ErrNoMatches {
 					logrus.Warnf("no matches for person %s", person.String())
