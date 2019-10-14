@@ -26,8 +26,8 @@ type safeUserCache struct {
 	cachePath string
 }
 
-// CachedEmailMatcher is a wrapper around Matcher with the cache for queried emails.
-type CachedEmailMatcher struct {
+// CachedMatcher is a wrapper around Matcher with the cache for queried emails.
+type CachedMatcher struct {
 	matcher Matcher
 	cache   safeUserCache
 }
@@ -47,15 +47,15 @@ func PathExists(path string) bool {
 }
 
 // NewCachedMatcher creates a new matcher with a cache for a given matcher interface.
-func NewCachedMatcher(matcher Matcher, cachePath string) (*CachedEmailMatcher, error) {
+func NewCachedMatcher(matcher Matcher, cachePath string) (*CachedMatcher, error) {
 	if cachePath == "" {
 		panic("cachePath cannot be empty")
 	}
 	logrus.WithFields(logrus.Fields{
 		"cachePath": cachePath,
-	}).Info("Using caching for external matching")
+	}).Info("Using cache for external matching")
 	cache := safeUserCache{cache: make(map[string]UserName), cachePath: cachePath, lock: sync.RWMutex{}}
-	cachedMatcher := &CachedEmailMatcher{matcher: matcher, cache: cache}
+	cachedMatcher := &CachedMatcher{matcher: matcher, cache: cache}
 	var err error
 	if PathExists(cachePath) {
 		err = cachedMatcher.LoadCache()
@@ -66,22 +66,20 @@ func NewCachedMatcher(matcher Matcher, cachePath string) (*CachedEmailMatcher, e
 	return cachedMatcher, err
 }
 
-// LoadCache reads CachedEmailMatcher cache from disk.
+// LoadCache reads CachedMatcher cache from disk.
 // It is a proxy for safeUserCache.LoadFromDisk() function.
-func (m *CachedEmailMatcher) LoadCache() error {
+func (m *CachedMatcher) LoadCache() error {
 	return m.cache.LoadFromDisk()
 }
 
-// DumpCache saves CachedEmailMatcher cache on disk.
+// DumpCache saves CachedMatcher cache on disk.
 // It is a proxy for safeUserCache.DumpOnDisk() function.
-func (m CachedEmailMatcher) DumpCache() error {
+func (m CachedMatcher) DumpCache() error {
 	return m.cache.DumpOnDisk()
 }
 
-// MatchByEmail returns the latest GitHub user with the given email.
-// If email was fetched already it uses cached value.
-// MatchByEmail runs `matcher.MatchByEmail` if not.
-func (m *CachedEmailMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
+// MatchByEmail looks in the cache first, and if there is a cache miss, forwards to the underlying Matcher.
+func (m *CachedMatcher) MatchByEmail(ctx context.Context, email string) (user, name string, err error) {
 	if username, exists := m.cache.ReadUserFromCache(email); exists {
 		if username.Matched {
 			return username.User, username.Name, nil
@@ -101,15 +99,33 @@ func (m *CachedEmailMatcher) MatchByEmail(ctx context.Context, email string) (us
 	return user, name, err
 }
 
-// SupportsMatchingByCommit indicates whether this Matcher allows querying identities by commit metadata.
-func (m *CachedEmailMatcher) SupportsMatchingByCommit() bool {
+// SupportsMatchingByCommit acts the same as the underlying Matcher.
+func (m *CachedMatcher) SupportsMatchingByCommit() bool {
 	return m.matcher.SupportsMatchingByCommit()
 }
 
-// MatchByCommit queries the identity of a given email address in a particular commit context.
-func (m *CachedEmailMatcher) MatchByCommit(
+// MatchByCommit looks in the cache first, and if there is a cache miss, forwards to the underlying Matcher.
+func (m *CachedMatcher) MatchByCommit(
 	ctx context.Context, email, repo, commit string) (user, name string, err error) {
-	return m.matcher.MatchByCommit(ctx, email, repo, commit)
+	if username, exists := m.cache.ReadUserFromCache(email); exists {
+		if username.Matched {
+			return username.User, username.Name, nil
+		}
+		return "", "", ErrNoMatches
+	}
+	user, name, err = m.matcher.MatchByCommit(ctx, email, repo, commit)
+	if err == nil {
+		m.cache.AddUserToCache(email, user, name, true)
+	}
+	if err == ErrNoMatches {
+		m.cache.AddUserToCache(email, user, name, false)
+	}
+	m.cache.lock.Lock()
+	if len(m.cache.cache)%saveFreq == 0 {
+		err = m.DumpCache()
+	}
+	m.cache.lock.Unlock()
+	return user, name, err
 }
 
 // Add to cache safely
@@ -180,7 +196,7 @@ func (m *safeUserCache) LoadFromDisk() error {
 
 // DumpOnDisk saves cache on disk
 func (m safeUserCache) DumpOnDisk() error {
-	logrus.Info("Dumping CachedEmailMatcher cache")
+	logrus.Info("Dumping CachedMatcher cache")
 	var file *os.File
 	existing := safeUserCache{cache: make(map[string]UserName), cachePath: m.cachePath, lock: m.lock}
 	flag := os.O_CREATE | os.O_WRONLY
@@ -212,8 +228,6 @@ func (m safeUserCache) DumpOnDisk() error {
 			return err
 		}
 	}
-	m.lock.RLock()
-	defer m.lock.RUnlock()
 	seq := make([]string, 0, len(m.cache))
 	for email := range m.cache {
 		seq = append(seq, email)
