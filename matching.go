@@ -47,6 +47,7 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 	username2extID := make(map[string]node)
 	var username string
 	var err error
+	noMatchWarned := map[string]struct{}{}
 	for index, person := range people {
 		for _, email := range person.Emails {
 			if matcher.SupportsMatchingByCommit() && person.SampleCommit != nil {
@@ -57,9 +58,13 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 			}
 			if err != nil {
 				if err == external.ErrNoMatches {
-					logrus.Warnf("no matches for person %s", person.String())
+					pstr := person.String()
+					if _, exists := noMatchWarned[pstr]; !exists {
+						noMatchWarned[pstr] = struct{}{}
+						logrus.Warnf("no matches for person %s", pstr)
+					}
 				} else {
-					logrus.Errorf("unexpected error for person %s: %s", person.String(), err)
+					logrus.Errorf("unexpected error for person %s: %v", person.String(), err)
 				}
 				unprocessedEmails[email] = struct{}{}
 			} else {

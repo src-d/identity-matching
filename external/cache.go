@@ -52,7 +52,7 @@ func NewCachedMatcher(matcher Matcher, cachePath string) (*CachedMatcher, error)
 	}
 	logrus.WithFields(logrus.Fields{
 		"cachePath": cachePath,
-	}).Info("Using cache for external matching")
+	}).Info("caching the external identities")
 	cache := safeUserCache{cache: make(map[string]CachedUser), cachePath: cachePath, lock: sync.RWMutex{}}
 	cachedMatcher := &CachedMatcher{matcher: matcher, cache: cache}
 	var err error
@@ -194,7 +194,7 @@ func (m *safeUserCache) LoadFromDisk() error {
 
 // DumpOnDisk saves cache on disk
 func (m safeUserCache) DumpOnDisk() error {
-	logrus.Info("Dumping CachedMatcher cache")
+	logrus.Infof("writing the external identities cache to %s", m.cachePath)
 	var file *os.File
 	existing := safeUserCache{cache: make(map[string]CachedUser), cachePath: m.cachePath, lock: m.lock}
 	flag := os.O_CREATE | os.O_WRONLY

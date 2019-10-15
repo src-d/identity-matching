@@ -61,49 +61,49 @@ func main() {
 		}
 	}
 
-	logrus.Info("looking for people in commits")
+	logrus.Info("fetching signatures from the commits")
 	start := time.Now()
 	connStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
 		args.User, args.Password, args.Host, args.Port, "gitbase")
 	blacklist, err := idmatch.NewBlacklist()
 	if err != nil {
-		logrus.Fatalf("unable to load the blacklist: %v", err)
+		logrus.Fatalf("failed to load the blacklist: %v", err)
 	}
 	people, nameFreqs, emailFreqs, err := idmatch.FindPeople(ctx, connStr, args.Cache, blacklist,
 		args.RecentMonths)
 	if err != nil {
-		logrus.Fatalf("unable to find people: %v", err)
+		logrus.Fatalf("failed to fetch the signatures: %v", err)
 	}
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
-		"people":  len(people),
-	}).Info("found people")
+		"count":   len(people),
+	}).Info("found signatures")
 
-	logrus.Info("reducing people")
+	logrus.Info("reducing identities")
 	start = time.Now()
 	if err := idmatch.ReducePeople(people, extmatcher, blacklist, args.MaxIdentities); err != nil {
-		logrus.Fatalf("unable to reduce matches: %s", err)
+		logrus.Fatalf("failed to reduce identities: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
-		"people":  len(people),
-	}).Info("reduced people")
+		"count":   len(people),
+	}).Info("reduced identities")
 
 	start = time.Now()
 	idmatch.SetPrimaryValues(people, nameFreqs, emailFreqs, args.RecentMinCount)
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
-	}).Info("primary names and emails are set")
+	}).Info("set primary names and emails")
 
-	logrus.Info("storing people")
+	logrus.Info("storing identities")
 	start = time.Now()
 	if err := people.WriteToParquet(args.Output, args.External); err != nil {
-		logrus.Fatalf("unable to store matches: %s", err)
+		logrus.Fatalf("failed to store identities: %s", err)
 	}
 	logrus.WithFields(logrus.Fields{
 		"elapsed": time.Since(start),
 		"path":    args.Output,
-	}).Info("stored people")
+	}).Info("stored identities")
 
 	reporter.Write()
 }
