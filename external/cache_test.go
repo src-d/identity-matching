@@ -198,3 +198,80 @@ func TestMatchCacheCommit(t *testing.T) {
 	req.Equal("new_user", user)
 	req.NoError(err)
 }
+
+func TestMatchCacheScheduledDump(t *testing.T) {
+	req := require.New(t)
+	matcher := TestNoMatchMatcher{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cache, cleanup := tempFile(t, "*.csv")
+	defer cleanup()
+	fixture := []byte(`email,user,match
+mcuadros-clone1@gmail.com,,0
+mcuadros-clone2@gmail.com,,0
+mcuadros-clone3@gmail.com,,0
+mcuadros-clone4@gmail.com,,0
+mcuadros-clone5@gmail.com,,0
+mcuadros-clone6@gmail.com,,0
+mcuadros-clone7@gmail.com,,0
+mcuadros-clone8@gmail.com,,0
+mcuadros-clone9@gmail.com,,0
+mcuadros-clone10@gmail.com,,0
+mcuadros-clone11@gmail.com,,0
+mcuadros-clone12@gmail.com,,0
+mcuadros-clone13@gmail.com,,0
+mcuadros-clone14@gmail.com,,0
+mcuadros-clone15@gmail.com,,0
+mcuadros-clone16@gmail.com,,0
+mcuadros-clone17@gmail.com,,0
+mcuadros-clone18@gmail.com,,0
+mcuadros-clone19@gmail.com,,0
+`)
+	expected := `email,user,match
+mcuadros-clone1@gmail.com,,0
+mcuadros-clone2@gmail.com,,0
+mcuadros-clone3@gmail.com,,0
+mcuadros-clone4@gmail.com,,0
+mcuadros-clone5@gmail.com,,0
+mcuadros-clone6@gmail.com,,0
+mcuadros-clone7@gmail.com,,0
+mcuadros-clone8@gmail.com,,0
+mcuadros-clone9@gmail.com,,0
+mcuadros-clone10@gmail.com,,0
+mcuadros-clone11@gmail.com,,0
+mcuadros-clone12@gmail.com,,0
+mcuadros-clone13@gmail.com,,0
+mcuadros-clone14@gmail.com,,0
+mcuadros-clone15@gmail.com,,0
+mcuadros-clone16@gmail.com,,0
+mcuadros-clone17@gmail.com,,0
+mcuadros-clone18@gmail.com,,0
+mcuadros-clone19@gmail.com,,0
+new@gmail.com,new_user,1
+`
+	_, err := cache.Write(fixture)
+	req.NoError(err)
+	cachedMatcher, err := NewCachedMatcher(matcher, cache.Name())
+	req.NoError(err)
+	user, err := cachedMatcher.MatchByCommit(
+		ctx, "new@gmail.com", "git://github.com/src-d/go-git.git",
+		"8d20cc5916edf7cfa6a9c5ed069f0640dc823c12")
+	req.Equal("new_user", user)
+	req.NoError(err)
+	newCache, err := ioutil.ReadFile(cache.Name())
+	req.NoError(err)
+	req.Equal(expected, string(newCache))
+
+	cache, cleanup = tempFile(t, "*.csv")
+	defer cleanup()
+	_, err = cache.Write(fixture)
+	req.NoError(err)
+	cachedMatcher, err = NewCachedMatcher(matcher, cache.Name())
+	req.NoError(err)
+	user, err = cachedMatcher.MatchByEmail(ctx, "new@gmail.com")
+	req.Equal("new_user", user)
+	req.NoError(err)
+	newCache, err = ioutil.ReadFile(cache.Name())
+	req.NoError(err)
+	req.Equal(expected, string(newCache))
+}

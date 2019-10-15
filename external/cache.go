@@ -92,9 +92,11 @@ func (m *CachedMatcher) MatchByEmail(ctx context.Context, email string) (user st
 	if err == ErrNoMatches {
 		m.cache.AddUserToCache(email, user, false)
 	}
+	m.cache.lock.Lock()
 	if len(m.cache.cache)%saveFreq == 0 {
 		err = m.DumpCache()
 	}
+	m.cache.lock.Unlock()
 	return user, err
 }
 
@@ -196,11 +198,11 @@ func (m *safeUserCache) LoadFromDisk() error {
 func (m safeUserCache) DumpOnDisk() error {
 	logrus.Infof("writing the external identities cache to %s", m.cachePath)
 	var file *os.File
-	existing := safeUserCache{cache: make(map[string]CachedUser), cachePath: m.cachePath, lock: m.lock}
+	existing := safeUserCache{cache: make(map[string]CachedUser), cachePath: m.cachePath, lock: sync.RWMutex{}}
 	flag := os.O_CREATE | os.O_WRONLY
 	if existing.LoadFromDisk() == nil && len(existing.cache) > 0 {
 		flag |= os.O_APPEND
-		logrus.Infof("Appending to existing %d records", len(existing.cache))
+		logrus.Infof("appending to existing %d records", len(existing.cache))
 	}
 	file, err := os.OpenFile(m.cachePath, flag, 0666)
 	if err != nil {
@@ -231,6 +233,7 @@ func (m safeUserCache) DumpOnDisk() error {
 		seq = append(seq, email)
 	}
 	sort.Strings(seq)
+	written := 0
 	for _, email := range seq {
 		username := m.cache[email]
 		if existing.cache[email] == username {
@@ -244,6 +247,8 @@ func (m safeUserCache) DumpOnDisk() error {
 		if err != nil {
 			return err
 		}
+		written++
 	}
+	logrus.Infof("written %d new records", written)
 	return nil
 }
