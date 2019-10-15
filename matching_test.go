@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gonum.org/v1/gonum/graph/simple"
 
 	"github.com/src-d/identity-matching/external"
 )
@@ -399,4 +400,23 @@ func TestSetPrimaryValues(t *testing.T) {
 	}
 	SetPrimaryValues(people, nameFreqs, emailFreqs, 5)
 	require.Equal(t, expected, people)
+}
+
+func TestAddEdgesWithMatcherCommits(t *testing.T) {
+	people := People{}
+	people[1] = &Person{ID: 1, NamesWithRepos: []NameWithRepo{{"Vadim", ""}},
+		Emails: []string{"vadim@sourced.tech"}, SampleCommit: &Commit{
+			Hash: "d78a9c8b0c077b5ecdb3cf1e1efab4635c97dd7b",
+			Repo: "git://github.com/src-d/hercules.git",
+		}}
+	matcher, _ := external.NewGitHubMatcher("", githubTestToken)
+	peopleGraph := simple.NewUndirectedGraph()
+	for index, person := range people {
+		peopleGraph.AddNode(node{person, index})
+	}
+	unprocessedEmails, err := addEdgesWithMatcher(people, peopleGraph, matcher)
+	req := require.New(t)
+	req.NoError(err)
+	req.Equal(0, len(unprocessedEmails))
+	req.Equal("vmarkovtsev", people[1].ExternalID)
 }
