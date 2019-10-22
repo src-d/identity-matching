@@ -62,6 +62,10 @@ matrix:
       install: skip
       script:
         - make test
+        - COMMIT=$(echo $TRAVIS_COMMIT | cut -c1-10)
+        - BUILD=$(date +"%m-%d-%Y_%H_%M_%S")
+        - go build -ldflags "-X main.version=$TRAVIS_TAG -X main.build=$BUILD -X main.commit=$COMMIT" github.com/src-d/identity-matching/cmd/match-identities
+        - ./match-identities --help || true
     - stage: deploy
       go: 1.13.x
       install: skip

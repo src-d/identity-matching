@@ -34,7 +34,25 @@ type cliArgs struct {
 	RecentMinCount int
 }
 
+var version string
+var build string
+var commit string
+
+func printBanner() {
+	fmt.Println(strings.Repeat("=", 80))
+
+	wrap := func(s string) string {
+		return s + strings.Repeat(" ", 80-len(s)-1) + "="
+	}
+
+	fmt.Println(wrap("= src-d/identity-matching " + version))
+	fmt.Println(wrap("= git " + commit))
+	fmt.Println(wrap("= built on " + build))
+	fmt.Println(strings.Repeat("=", 80))
+}
+
 func main() {
+	printBanner()
 	args := parseArgs()
 
 	ctx, cancel := context.WithCancel(context.Background())
