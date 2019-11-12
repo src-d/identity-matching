@@ -66,3 +66,8 @@ func (m BitBucketMatcher) MatchByCommit(
 	ctx context.Context, email, repo, commit string) (user string, err error) {
 	return "", errors.New("not implemented")
 }
+
+// OnIdle does nothing here.
+func (m BitBucketMatcher) OnIdle() error {
+	return nil
+}

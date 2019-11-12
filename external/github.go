@@ -153,6 +153,11 @@ func (m GitHubMatcher) MatchByCommit(
 	}
 }
 
+// OnIdle does nothing here.
+func (m GitHubMatcher) OnIdle() error {
+	return nil
+}
+
 func checkResponse(response *github.Response, err error, numFailures *uint64) int {
 	code := response.Response.StatusCode
 	if err == nil && code >= 200 && code < 300 {

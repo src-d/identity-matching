@@ -86,9 +86,10 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 			}
 		}
 	}
+	err = matcher.OnIdle()
 	reporter.Commit("external API components", len(username2extID))
 	reporter.Commit("external API emails not found", len(unprocessedEmails))
-	return unprocessedEmails, nil
+	return unprocessedEmails, err
 }
 
 // ReducePeople merges the identities together by following the fixed set of rules.
@@ -120,7 +121,7 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 		for _, email := range person.Emails {
 			if matcher != nil {
 				if _, unmatched := unmatchedEmails[email]; !unmatched {
-					// Do not process emails which were matched with external matcher
+					// Do not process emails which were matched by an external matcher
 					continue
 				}
 			}
