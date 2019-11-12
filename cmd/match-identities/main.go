@@ -144,9 +144,11 @@ func parseArgs() cliArgs {
 	flag.StringVar(&args.APIURL, "api-url", "",
 		"API URL of the external matching service, the blank value means the public website")
 	flag.StringVar(&args.Token, "token", "", "API token for the external matching service")
-	flag.StringVar(&args.Cache, "cache", "cache-raw.csv", "Path to the cached raw signatures")
-	flag.StringVar(&args.ExternalCache, "external-cache", "cache-external.csv",
-		"Path to the cached matches found by using an external identity service such as GitHub API.")
+	flag.StringVar(&args.Cache, "cache", fmt.Sprintf("cache-raw-%s.csv", idmatch.HashPeopleDiscoverySQL()),
+		"Path to the cached raw signatures")
+	flag.StringVar(&args.ExternalCache, "external-cache", "cache-external-{provider}.csv",
+		"Path to the cached matches found by using an external identity service such as GitHub API."+
+			"{provider} will be replaced with the external service name.")
 	flag.IntVar(&args.MaxIdentities, "max-identities", 20,
 		"If a person has more than this number of unique names and unique emails summed, "+
 			"no more identities will be merged. If the identities are matched by an external API "+
@@ -166,5 +168,6 @@ func parseArgs() cliArgs {
 			logrus.Fatalf("unsupported external matching service: %s", args.External)
 		}
 	}
+	args.ExternalCache = strings.ReplaceAll(args.ExternalCache, "{provider}", args.External)
 	return args
 }

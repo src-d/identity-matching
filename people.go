@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"os"
 	"regexp"
@@ -424,9 +426,20 @@ func getStats(commits []signatureWithRepo, recentStartTime time.Time) (
 }
 
 const findPeopleSQL = `
-SELECT repository_id, commit_author_name, commit_author_email, commit_hash, commit_author_when
-FROM commits;
+SELECT repository_id, commit_author_name, commit_author_email, MAX(commit_hash), MAX(commit_author_when)
+FROM commits
+GROUP BY repository_id, commit_author_name, commit_author_email;
 `
+
+// HashPeopleDiscoverySQL returns the hashsum of the SQL used to fetch the raw Git signatures.
+func HashPeopleDiscoverySQL() string {
+	h := fnv.New32a()
+	n, err := h.Write([]byte(findPeopleSQL))
+	if err != nil || n != len(findPeopleSQL) {
+		logrus.Panicf("HashPeopleDiscoverySQL: %d %d %v", n, len(findPeopleSQL), err)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
 
 func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err error) {
 	var file *os.File
