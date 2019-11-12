@@ -236,7 +236,7 @@ func (m safeUserCache) DumpOnDisk() error {
 	written := 0
 	for _, email := range seq {
 		username := m.cache[email]
-		if existing.cache[email] == username {
+		if eusername, exists := existing.cache[email]; exists && eusername == username {
 			continue
 		}
 		match := csvFalse

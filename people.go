@@ -32,6 +32,26 @@ type signatureWithRepo struct {
 	time  time.Time
 }
 
+func (swr signatureWithRepo) String() string {
+	repo := swr.repo
+	if repo == "" {
+		repo = "<no repo>"
+	}
+	name := swr.name
+	if name == "" {
+		name = "<no name>"
+	}
+	email := swr.email
+	if email == "" {
+		email = "<no email>"
+	}
+	hash := swr.hash
+	if hash == "" {
+		hash = "<no hash>"
+	}
+	return "[" + strings.Join([]string{repo, name, email, hash, swr.time.String()}, " ") + "]"
+}
+
 // NameWithRepo is a Name that can be linked to a specific repo.
 type NameWithRepo struct {
 	Name string
@@ -90,8 +110,12 @@ func (p Person) String() string {
 	}
 	sort.Strings(namesWithRepos)
 	sort.Strings(p.Emails)
-	return fmt.Sprintf("%s:%s||%s", p.ExternalID,
-		strings.Join(namesWithRepos, "|"), strings.Join(p.Emails, "|"))
+	extid := p.ExternalID
+	if extid == "" {
+		extid = "<no external id>"
+	}
+	return fmt.Sprintf("%s:%s||%s",
+		extid, strings.Join(namesWithRepos, "|"), strings.Join(p.Emails, "|"))
 }
 
 // People is a map of persons indexed by their ID.
@@ -464,7 +488,7 @@ func readSignaturesFromDisk(filePath string) (commits []signatureWithRepo, err e
 			person.time, err = time.Parse(time.RFC3339, record[header["time"]])
 			if err != nil || person.repo == "" || person.email == "" || person.name == "" ||
 				person.hash == "" {
-				logrus.Warnf("invalid cache item: %v: %v", record, err)
+				logrus.Warnf("invalid cache item: %v: %v", person.String(), err)
 				continue
 			}
 			commits = append(commits, person)
