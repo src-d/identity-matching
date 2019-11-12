@@ -69,3 +69,8 @@ func (m GitLabMatcher) MatchByCommit(
 	ctx context.Context, email, repo, commit string) (user string, err error) {
 	return "", errors.New("not implemented")
 }
+
+// OnIdle does nothing here.
+func (m GitLabMatcher) OnIdle() error {
+	return nil
+}

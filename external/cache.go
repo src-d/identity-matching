@@ -65,16 +65,21 @@ func NewCachedMatcher(matcher Matcher, cachePath string) (*CachedMatcher, error)
 	return cachedMatcher, err
 }
 
-// LoadCache reads CachedMatcher cache from disk.
+// LoadCache reads the CachedMatcher cache from disk.
 // It is a proxy for safeUserCache.LoadFromDisk() function.
 func (m *CachedMatcher) LoadCache() error {
 	return m.cache.LoadFromDisk()
 }
 
-// DumpCache saves CachedMatcher cache on disk.
+// DumpCache saves the current CachedMatcher cache on disk.
 // It is a proxy for safeUserCache.DumpOnDisk() function.
 func (m CachedMatcher) DumpCache() error {
 	return m.cache.DumpOnDisk()
+}
+
+// OnIdle saves the current CachedMatcher cache on disk.
+func (m CachedMatcher) OnIdle() error {
+	return m.DumpCache()
 }
 
 // MatchByEmail looks in the cache first, and if there is a cache miss, forwards to the underlying Matcher.
@@ -236,7 +241,7 @@ func (m safeUserCache) DumpOnDisk() error {
 	written := 0
 	for _, email := range seq {
 		username := m.cache[email]
-		if existing.cache[email] == username {
+		if eusername, exists := existing.cache[email]; exists && eusername == username {
 			continue
 		}
 		match := csvFalse

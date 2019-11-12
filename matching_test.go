@@ -280,6 +280,10 @@ func (m TestMatcher) MatchByCommit(ctx context.Context, email, repo, commit stri
 	return "", nil
 }
 
+func (m TestMatcher) OnIdle() error {
+	return nil
+}
+
 func TestReducePeopleSameNameDifferentExternalIds(t *testing.T) {
 	var people = People{
 		1: {ID: 1, NamesWithRepos: []NameWithRepo{{"Bob", ""}}, Emails: []string{"Bob@google.com"}},

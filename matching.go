@@ -75,7 +75,7 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 				}
 				person.ExternalID = username
 				if val, ok := username2extID[username]; ok {
-					err := setEdge(people, peopleGraph, val, peopleGraph.Node(int64(index)).(node))
+					err := setEdge(peopleGraph, val, peopleGraph.Node(index).(node))
 					if err != nil {
 						return unprocessedEmails, nil
 					}
@@ -86,9 +86,10 @@ func addEdgesWithMatcher(people People, peopleGraph *simple.UndirectedGraph,
 			}
 		}
 	}
+	err = matcher.OnIdle()
 	reporter.Commit("external API components", len(username2extID))
 	reporter.Commit("external API emails not found", len(unprocessedEmails))
-	return unprocessedEmails, nil
+	return unprocessedEmails, err
 }
 
 // ReducePeople merges the identities together by following the fixed set of rules.
@@ -120,7 +121,7 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 		for _, email := range person.Emails {
 			if matcher != nil {
 				if _, unmatched := unmatchedEmails[email]; !unmatched {
-					// Do not process emails which were matched with external matcher
+					// Do not process emails which were matched by an external matcher
 					continue
 				}
 			}
@@ -129,7 +130,7 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 				continue
 			}
 			if val, ok := email2id[email]; ok {
-				err = setEdge(people, peopleGraph, val, peopleGraph.Node(index).(node))
+				err = setEdge(peopleGraph, val, peopleGraph.Node(index).(node))
 				if err != nil {
 					return err
 				}
@@ -141,40 +142,40 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 	reporter.Commit("people matched by email", len(email2id))
 
 	// Add edges by the same unpopular name
-	name2id := make(map[string]map[string]node)
-	// we need to sort keys because algorithm is order dependent
+	name2id := make(map[string]map[string][]node)
+	// We need to sort keys because the algorithm is order dependent
 	keys := make([]int64, 0, len(people))
 	for k := range people {
 		keys = append(keys, k)
 	}
 	Int64Slice(keys).Sort()
 	for _, index := range keys {
-		person := people[index]
-		iNode := peopleGraph.Node(index).(node)
-		for _, name := range person.NamesWithRepos {
+		myNode := peopleGraph.Node(index).(node)
+		for _, name := range myNode.Value.NamesWithRepos {
 			if blacklist.isPopularName(name.String()) {
 				reporter.Increment("popular names found")
 				continue
 			}
 			for { // this for is to exit with break from the block when required
-				externals, exists := name2id[name.String()]
+				sameNameIDNodes, exists := name2id[name.String()]
 				if exists {
-					if n, exists := externals[person.ExternalID]; exists {
-						if topo.PathExistsIn(peopleGraph, n, iNode) ||
-							!passIdentitiesLimit(peopleGraph, maxIdentities, iNode, n) {
-							break
-						}
-						err = setEdge(people, peopleGraph, n, iNode)
-						if err != nil {
-							return err
+					if sameNameAndExternalIDNodes, exists := sameNameIDNodes[myNode.Value.ExternalID]; exists {
+						for _, connectedNode := range sameNameAndExternalIDNodes {
+							if !passIdentitiesLimit(peopleGraph, maxIdentities, myNode, connectedNode) {
+								continue
+							}
+							err = setEdge(peopleGraph, connectedNode, myNode)
+							if err != nil {
+								return err
+							}
 						}
 						break
 					}
 				} else {
-					externals = map[string]node{}
-					name2id[name.String()] = externals
+					sameNameIDNodes = map[string][]node{}
+					name2id[name.String()] = sameNameIDNodes
 				}
-				externals[person.ExternalID] = iNode
+				sameNameIDNodes[myNode.Value.ExternalID] = append(sameNameIDNodes[myNode.Value.ExternalID], myNode)
 				break
 			}
 		}
@@ -182,22 +183,25 @@ func ReducePeople(people People, matcher external.Matcher, blacklist Blacklist,
 
 	// Merge names with only one found external id
 	for _, externalIDs := range name2id {
-		if len(externalIDs) == 2 { // if there is more than 2 externalIDs then there are at least two external id found
+		if len(externalIDs) == 2 { // one should be empty => merge them
 			toMerge := false
-			var edge []node
-			for externalID, node := range externalIDs {
+			var connected []node
+			for externalID, nodes := range externalIDs {
 				if externalID == "" {
 					toMerge = true
 				}
-				edge = append(edge, node)
+				connected = append(connected, nodes...)
 			}
 			if toMerge {
-				if topo.PathExistsIn(peopleGraph, edge[0], edge[1]) ||
-					!passIdentitiesLimit(peopleGraph, maxIdentities, edge[0], edge[1]) {
-					break
+				for x, edgeX := range connected {
+					for _, edgeY := range connected[x+1:] {
+						if !passIdentitiesLimit(peopleGraph, maxIdentities, edgeX, edgeY) {
+							continue
+						}
+						err = setEdge(peopleGraph, edgeX, edgeY)
+						// err can occur here and it is fine.
+					}
 				}
-				err = setEdge(people, peopleGraph, edge[0], edge[1])
-				// err can occur here and it is fine.
 			}
 		}
 	}
@@ -236,7 +240,7 @@ func passIdentitiesLimit(graph *simple.UndirectedGraph, maxIdentities int, node1
 	n2Emails, n2Names := componentUniqueEmailsAndNames(graph, node2)
 	if n1Emails+n1Names >= maxIdentities || n2Names+n2Emails >= maxIdentities {
 		logrus.Debugf(
-			"edge is not added between %s (%d emails, %d names) and %s (%d emails, %d names)",
+			"above the identities limit: %s (%d emails, %d names) and %s (%d emails, %d names)",
 			node1.Value.String(), n1Emails, n1Names, node2.Value.String(), n2Emails, n2Names)
 		return false
 	}
@@ -244,23 +248,21 @@ func passIdentitiesLimit(graph *simple.UndirectedGraph, maxIdentities int, node1
 }
 
 // setEdge propagates ExternalID when you connect two components
-func setEdge(people People, graph *simple.UndirectedGraph, node1, node2 node) error {
-	node1ID := node1.ID()
-	node2ID := node2.ID()
-	ExternalID1 := people[node1ID].ExternalID
-	ExternalID2 := people[node2ID].ExternalID
-	if ExternalID1 != "" && ExternalID2 != "" && ExternalID1 != ExternalID2 {
+func setEdge(graph *simple.UndirectedGraph, node1, node2 node) error {
+	externalID1 := node1.Value.ExternalID
+	externalID2 := node2.Value.ExternalID
+	if externalID1 != "" && externalID2 != "" && externalID1 != externalID2 {
 		return fmt.Errorf(
 			"cannot set edge between nodes with different ExternalIDs: %s %s",
-			ExternalID1, ExternalID2)
+			externalID1, externalID2)
 	}
 	var nodeToFix node
 	newExternalID := ""
-	if ExternalID1 == "" && ExternalID2 != "" {
-		newExternalID = ExternalID2
+	if externalID1 == "" && externalID2 != "" {
+		newExternalID = externalID2
 		nodeToFix = node1
-	} else if ExternalID1 != "" && ExternalID2 == "" {
-		newExternalID = ExternalID1
+	} else if externalID1 != "" && externalID2 == "" {
+		newExternalID = externalID1
 		nodeToFix = node2
 	}
 	if newExternalID != "" {

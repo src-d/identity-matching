@@ -13,6 +13,8 @@ type Matcher interface {
 	SupportsMatchingByCommit() bool
 	// MatchByCommit queries the identity of a given email address in a particular commit context.
 	MatchByCommit(ctx context.Context, email, repo, commit string) (user string, err error)
+	// OnIdle signals the underlying implementation that the current series of queries is over.
+	OnIdle() error
 }
 
 // MatcherConstructor is the Matcher constructor function type.
