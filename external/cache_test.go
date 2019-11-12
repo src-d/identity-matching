@@ -90,6 +90,10 @@ func (m TestNoMatchMatcher) MatchByCommit(
 	return "", ErrTest
 }
 
+func (m TestNoMatchMatcher) OnIdle() error {
+	return nil
+}
+
 func TestMatchCacheOnly(t *testing.T) {
 	req := require.New(t)
 	matcher := TestNoMatchMatcher{}
